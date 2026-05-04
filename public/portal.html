@@ -38,10 +38,17 @@
         #dashboard-frame { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         .session-warning { max-width: 500px; margin: 0 auto 24px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); color: #fecaca; font-size: 14px; line-height: 1.45; }
         .session-warning strong { color: #fff; }
+        .front-quick-links { max-width: 500px; margin: -12px auto 22px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 8px; box-sizing: border-box; }
+        .front-quick-links a { display: inline-flex; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; color: #fff; background: linear-gradient(135deg, #4f7cfd 0%, #6366f1 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32); border: 1px solid rgba(255,255,255,0.12); }
+        .front-quick-links a:hover { filter: brightness(1.06); }
+        .front-quick-links a:active { opacity: 0.9; }
     </style>
 </head>
 <body>
     <div class="mobile-header"><h1>Team Portal</h1></div>
+    <nav class="front-quick-links" aria-label="Quick links">
+        <a href="/deepseek/" target="_blank" rel="noopener noreferrer">Open DeepSeek</a>
+    </nav>
     <div id="mobile-cards" class="card-container">
         <div class="loading-container">
             <div class="spinner"></div>
@@ -100,15 +107,15 @@
             { name: 'Gemini', target: 'Gemini', logo: 'gemini.png' },
             { name: 'Grok', target: 'Grok', logo: 'grok.png' },
             { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
+            { name: 'DeepSeek', target: 'DeepSeek', logo: 'deepseek.png', isDirect: true, url: '/deepseek/' },
             { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
-            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' },
-            { name: 'DeepSeek', target: 'DeepSeek', logo: 'deepseek.png', isDirect: true, url: '/deepseek/' }
+            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' }
         ];
         const allInstances = {
             'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
+            'DeepSeek': [{ id: 'DeepSeek-Proxy', title: 'DeepSeek (team session)', status: 'Idle', badge: 'Team', target: 'DeepSeek', isDirect: true, url: '/deepseek/' }],
             'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
-            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }],
-            'DeepSeek': [{ id: 'DeepSeek-Proxy', title: 'DeepSeek (team session)', status: 'Idle', badge: 'Team', target: 'DeepSeek', isDirect: true, url: '/deepseek/' }]
+            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }]
         };
         let currentCatIndex = 0;
         let isConnecting = false;
@@ -253,7 +260,7 @@
                     <div class="session-warning">
                         <strong>ChessPNT session not loading.</strong>
                         ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
-                        If you only see Perplexity, Qwen, and DeepSeek, the ChessPNT session failed — set
+                        If you only see DeepSeek, Perplexity, and Qwen, the ChessPNT session failed — set
                         <code>CHESSPNT_USE_PUPPETEER=1</code> with <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code> (or <code>CHESSGPT_*</code> aliases), or refresh cookies on the volume.
                         When Puppeteer is enabled, this page <strong>waits</strong> for server-side login before loading the ChessPNT iframe (so you are not racing a 30–90s login). When something breaks, see <code>GET /health</code> and the <strong>Server diagnostics</strong> section below for full errors (<code>stack</code>, <code>causeChain</code>, etc.).
                         If it worked on <strong>localhost</strong> but fails on <strong>Railway</strong>, the wrapper must reach ChessPNT from the datacenter (different IP than your home). Open <code>GET /api/probe-chesspnt-outbound</code> on the same host — <code>ok:true</code> means egress works; <code>ok:false</code> is a network/upstream block, not CORS in the browser.
