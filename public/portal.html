@@ -38,10 +38,23 @@
         #dashboard-frame { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         .session-warning { max-width: 500px; margin: 0 auto 24px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); color: #fecaca; font-size: 14px; line-height: 1.45; }
         .session-warning strong { color: #fff; }
+        .perplexity-helper { max-width: 500px; margin: 0 auto 20px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(79, 172, 254, 0.35); background: rgba(79, 172, 254, 0.08); color: #e2e8f0; font-size: 13px; line-height: 1.5; }
+        .perplexity-helper summary { cursor: pointer; font-weight: 700; color: #7dd3fc; }
+        .perplexity-helper a { color: #7dd3fc; }
+        .perplexity-helper ol { margin: 8px 0 0 0; padding-left: 1.25rem; }
     </style>
 </head>
 <body>
     <div class="mobile-header"><h1>Team Portal</h1></div>
+    <details class="perplexity-helper">
+        <summary>Perplexity (tuangouai.com): auto-click the red button</summary>
+        <p style="margin:10px 0 0 0;color:#94a3b8">Tampermonkey runs in <strong>your browser</strong>, not on Railway. The repo only ships the <code>.user.js</code> file; each teammate installs the extension once.</p>
+        <ol>
+            <li><a href="https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" target="_blank" rel="noopener">Tampermonkey — Chrome Web Store</a></li>
+            <li><a href="https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd" target="_blank" rel="noopener">Tampermonkey — Edge Add-ons</a></li>
+            <li><a id="perplexity-userscript-install" href="/userscripts/tuangou-perplexity-autoclick.user.js">Install userscript from this host</a> (opens Tampermonkey install prompt)</li>
+        </ol>
+    </details>
     <div id="mobile-cards" class="card-container">
         <div class="loading-container">
             <div class="spinner"></div>
@@ -66,12 +79,12 @@
             { name: 'Gemini', target: 'Gemini', logo: 'gemini.png' },
             { name: 'Grok', target: 'Grok', logo: 'grok.png' },
             { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
-            { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/', token: 'perplexity-30-10-cdk|706323' },
+            { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/?chessgpt_autoppx=1', token: 'perplexity-30-10-cdk|706323' },
             { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' }
         ];
         const allInstances = {
             'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
-            'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/', token: 'perplexity-30-10-cdk|706323' }],
+            'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/?chessgpt_autoppx=1', token: 'perplexity-30-10-cdk|706323' }],
             'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }]
         };
         let currentCatIndex = 0;
@@ -212,7 +225,7 @@
                         ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
                         If you only see Perplexity and Qwen, the ChessPNT session failed — set
                         <code>CHESSPNT_USE_PUPPETEER=1</code> with <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code> (or <code>CHESSGPT_*</code> aliases), or refresh cookies on the volume.
-                        Open <code>/health</code> on this host to see Puppeteer status and <code>lastPuppeteerError</code> without reading Railway logs.
+                        When something breaks, this app records the <strong>real</strong> exception (message, <code>code</code>, <code>errno</code>, <code>stack</code>, <code>causeChain</code>) on <code>GET /health</code> and in Railway logs. If Puppeteer or the proxy failed, an expandable <strong>Server diagnostics</strong> section appears at the bottom of this page.
                     </div>`;
             }
             categories.forEach(cat => {
@@ -252,6 +265,37 @@
             cardsContainer.innerHTML = html;
         }
         renderUI();
+    </script>
+    <details id="diag-wrap" style="display:none;max-width:960px;margin:20px auto;padding:0 16px 40px;box-sizing:border-box;color:#94a3b8;font-size:12px;">
+        <summary style="cursor:pointer;color:#cbd5e1;font-weight:600;">Server diagnostics (same data as GET /health)</summary>
+        <pre id="diag-pre" style="white-space:pre-wrap;word-break:break-word;background:#0b1220;padding:14px;border-radius:10px;border:1px solid #334155;margin-top:10px;color:#e2e8f0;font-size:11px;line-height:1.4;"></pre>
+    </details>
+    <script>
+        (function () {
+            fetch('/health')
+                .then(function (r) { return r.json(); })
+                .then(function (h) {
+                    var wrap = document.getElementById('diag-wrap');
+                    var pre = document.getElementById('diag-pre');
+                    if (!wrap || !pre) return;
+                    var show = h.puppeteerLastFailure || h.proxyChesspntLastFailure || h.proxyQwenLastFailure;
+                    if (show) {
+                        pre.textContent = JSON.stringify(
+                            {
+                                puppeteerLastFailure: h.puppeteerLastFailure,
+                                proxyChesspntLastFailure: h.proxyChesspntLastFailure,
+                                proxyQwenLastFailure: h.proxyQwenLastFailure,
+                            },
+                            null,
+                            2
+                        );
+                        wrap.style.display = 'block';
+                    }
+                })
+                .catch(function (err) {
+                    console.warn('/health fetch failed', err);
+                });
+        })();
     </script>
 </body>
 </html>

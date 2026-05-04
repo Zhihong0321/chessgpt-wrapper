@@ -4,6 +4,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { serializeError, formatErrorLogLine } = require('./serialize_error');
 
 const app = express();
 app.use(cors());
@@ -32,7 +33,11 @@ function readJsonFileIfExists(filePath) {
     try {
         if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (e) {
-        console.error('[chesspnt-wrapper] Invalid JSON file:', filePath, e.message);
+        console.error(
+            '[chesspnt-wrapper] Invalid JSON file:',
+            filePath,
+            '\n' + JSON.stringify(serializeError(e), null, 2)
+        );
     }
     return null;
 }
@@ -64,7 +69,7 @@ function readInitialLocalStorage() {
         try {
             return JSON.parse(raw);
         } catch (e) {
-            console.error('CHESSPNT_INJECT_LS_JSON invalid JSON:', e.message);
+            console.error('CHESSPNT_INJECT_LS_JSON invalid JSON:\n' + JSON.stringify(serializeError(e), null, 2));
         }
     }
     const fromFile = readJsonFileIfExists(chesspntLsPath);
@@ -151,18 +156,27 @@ function persistChesspntSessionToDisk() {
 
 let puppeteerLoginInFlight = null;
 
-/** For GET /health — no secrets, only lengths and last Puppeteer outcome. */
-const chesspntSessionMeta = {
-    lastAttemptAt: null,
-    lastAttemptReason: null,
-    lastOkAt: null,
-    lastError: null,
+/** Populated for GET /health — structured errors, no passwords. */
+const healthState = {
+    lastPuppeteerAttemptAt: null,
+    lastPuppeteerAttemptReason: null,
+    lastPuppeteerOkAt: null,
+    puppeteerLastFailure: null,
+    proxyChesspntLastFailure: null,
+    proxyQwenLastFailure: null,
 };
+
+function logPuppeteerFailure(err) {
+    const detail = serializeError(err);
+    healthState.puppeteerLastFailure = detail;
+    console.error('[chesspnt-wrapper] Puppeteer login failed — full detail:\n' + JSON.stringify(detail, null, 2));
+    if (err && err.stack) console.error(err.stack);
+}
 
 async function runChesspntPuppeteerLogin(reason) {
     if (!puppeteerWanted) return false;
-    chesspntSessionMeta.lastAttemptAt = new Date().toISOString();
-    chesspntSessionMeta.lastAttemptReason = String(reason || '');
+    healthState.lastPuppeteerAttemptAt = new Date().toISOString();
+    healthState.lastPuppeteerAttemptReason = String(reason || '');
     const { loginChesspntSession } = require('./chesspnt_puppeteer_login');
     console.log('[chesspnt-wrapper] ChessPNT Puppeteer login:', reason || 'refresh');
     const { cookieHeader, localStorageObj } = await loginChesspntSession({
@@ -173,13 +187,13 @@ async function runChesspntPuppeteerLogin(reason) {
     });
     sessionCookies = cookieHeader;
     sessionLocalStorage = localStorageObj;
-    chesspntSessionMeta.lastOkAt = new Date().toISOString();
-    chesspntSessionMeta.lastError = null;
+    healthState.lastPuppeteerOkAt = new Date().toISOString();
+    healthState.puppeteerLastFailure = null;
     try {
         persistChesspntSessionToDisk();
         console.log('[chesspnt-wrapper] Session saved to', DATA_DIR);
     } catch (e) {
-        console.warn('[chesspnt-wrapper] Could not persist session:', e.message);
+        console.error('[chesspnt-wrapper] Could not persist session:\n' + JSON.stringify(serializeError(e), null, 2));
     }
     return true;
 }
@@ -189,8 +203,7 @@ function schedulePuppeteerLogin(reason) {
     if (puppeteerLoginInFlight) return puppeteerLoginInFlight;
     puppeteerLoginInFlight = runChesspntPuppeteerLogin(reason)
         .catch((e) => {
-            chesspntSessionMeta.lastError = String(e.message || e);
-            console.error('[chesspnt-wrapper] Puppeteer login failed:', e.message || e);
+            logPuppeteerFailure(e);
         })
         .finally(() => {
             puppeteerLoginInFlight = null;
@@ -208,7 +221,7 @@ try {
         console.log('[chesspnt-wrapper] Qwen session loaded from', sessionPath);
     }
 } catch (e) {
-    console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', e.message);
+    console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', formatErrorLogLine('[qwen session] ', e));
 }
 
 app.get('/health', (req, res) => {
@@ -220,10 +233,12 @@ app.get('/health', (req, res) => {
         puppeteerWanted,
         cookieHeaderLength: sessionCookies ? sessionCookies.length : 0,
         hasAccessToken: typeof at === 'string' && at.length > 20,
-        lastPuppeteerAttemptAt: chesspntSessionMeta.lastAttemptAt,
-        lastPuppeteerAttemptReason: chesspntSessionMeta.lastAttemptReason,
-        lastPuppeteerOkAt: chesspntSessionMeta.lastOkAt,
-        lastPuppeteerError: chesspntSessionMeta.lastError,
+        lastPuppeteerAttemptAt: healthState.lastPuppeteerAttemptAt,
+        lastPuppeteerAttemptReason: healthState.lastPuppeteerAttemptReason,
+        lastPuppeteerOkAt: healthState.lastPuppeteerOkAt,
+        puppeteerLastFailure: healthState.puppeteerLastFailure,
+        proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
+        proxyQwenLastFailure: healthState.proxyQwenLastFailure,
     });
 });
 
@@ -239,11 +254,27 @@ app.get('/', (req, res) => {
         html = html.replace('</head>', injection + '</head>');
         res.send(html);
     } catch (e) {
-        res.status(500).send('Error loading portal: ' + e.message);
+        const detail = serializeError(e);
+        res.status(500).type('text/plain; charset=utf-8').send(
+            'Error loading portal\n\n' + JSON.stringify(detail, null, 2) + (e.stack ? '\n\n' + e.stack : '')
+        );
     }
 });
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+function recordProxyFailure(label, err, req, targetUrl) {
+    const payload = {
+        at: new Date().toISOString(),
+        label,
+        requestPath: req && req.url,
+        target: targetUrl,
+        error: serializeError(err),
+    };
+    if (label === 'chesspnt') healthState.proxyChesspntLastFailure = payload;
+    else healthState.proxyQwenLastFailure = payload;
+    console.error(`[chesspnt-wrapper] Proxy error (${label}):\n` + JSON.stringify(payload, null, 2));
+}
 
 const proxyOptions = {
     target: PROXY_TARGET,
@@ -263,11 +294,30 @@ const proxyOptions = {
             schedulePuppeteerLogin('upstream-401');
         }
     },
+    onError: (err, req, res, target) => {
+        recordProxyFailure('chesspnt', err, req, String(target || PROXY_TARGET));
+        if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(
+                JSON.stringify(
+                    {
+                        where: 'chesspnt reverse proxy',
+                        target: PROXY_TARGET,
+                        path: req && req.url,
+                        error: serializeError(err),
+                    },
+                    null,
+                    2
+                )
+            );
+        }
+    },
     cookieDomainRewrite: { '*': '' },
 };
 
+const QWEN_TARGET = 'https://chat.qwen.ai';
 const qwenProxyOptions = {
-    target: 'https://chat.qwen.ai',
+    target: QWEN_TARGET,
     changeOrigin: true,
     ws: true,
     onProxyReq: (proxyReq, req, res) => {
@@ -281,6 +331,24 @@ const qwenProxyOptions = {
     onProxyRes: (proxyRes, req, res) => {
         delete proxyRes.headers['content-security-policy'];
         delete proxyRes.headers['x-frame-options'];
+    },
+    onError: (err, req, res, target) => {
+        recordProxyFailure('qwen', err, req, String(target || QWEN_TARGET));
+        if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(
+                JSON.stringify(
+                    {
+                        where: 'qwen reverse proxy',
+                        target: QWEN_TARGET,
+                        path: req && req.url,
+                        error: serializeError(err),
+                    },
+                    null,
+                    2
+                )
+            );
+        }
     },
     cookieDomainRewrite: { '*': '' },
 };
@@ -300,9 +368,9 @@ const server = app.listen(PORT, LISTEN_HOST, () => {
 
     // Never block listen() on Puppeteer — Railway treats slow open port as deploy failure.
     if (puppeteerWanted) {
-        schedulePuppeteerLogin('startup')
-            .then(() => console.log('[chesspnt-wrapper] Puppeteer startup login finished'))
-            .catch(() => {});
+        schedulePuppeteerLogin('startup').then(() =>
+            console.log('[chesspnt-wrapper] Puppeteer startup attempt finished (see logs or GET /health if it failed)')
+        );
     }
 
     if (puppeteerWanted && PUPPETEER_REFRESH_MS > 0) {
@@ -318,6 +386,7 @@ const server = app.listen(PORT, LISTEN_HOST, () => {
 });
 
 server.on('error', (err) => {
-    console.error('[chesspnt-wrapper] Server failed to start:', err);
+    console.error('[chesspnt-wrapper] Server failed to start:\n' + JSON.stringify(serializeError(err), null, 2));
+    if (err.stack) console.error(err.stack);
     process.exit(1);
 });
