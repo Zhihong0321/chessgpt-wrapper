@@ -236,37 +236,36 @@ const qwenProxyOptions = {
 app.use('/qwen', createProxyMiddleware(qwenProxyOptions));
 app.use('/', createProxyMiddleware(proxyOptions));
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+/** Railway and most PaaS require binding all interfaces; health checks need the port open immediately. */
+const LISTEN_HOST = process.env.HOST || '0.0.0.0';
 
-async function main() {
-    if (puppeteerWanted) {
-        try {
-            await runChesspntPuppeteerLogin('startup');
-            console.log('[chesspnt-wrapper] Puppeteer startup login OK');
-        } catch (e) {
-            console.error('[chesspnt-wrapper] Startup Puppeteer login failed, using file/env session:', e.message || e);
-        }
+const server = app.listen(PORT, LISTEN_HOST, () => {
+    console.log(`Team Proxy Server listening on http://${LISTEN_HOST}:${PORT}`);
+    if (!process.env.PERSISTENT_STORAGE_DIR) {
+        console.log('[chesspnt-wrapper] Tip: set PERSISTENT_STORAGE_DIR=/storage on Railway for persisted sessions.');
     }
 
-    app.listen(PORT, () => {
-        console.log('Team Proxy Server is running on http://localhost:' + PORT);
-        if (!process.env.PERSISTENT_STORAGE_DIR) {
-            console.log('[chesspnt-wrapper] Tip: set PERSISTENT_STORAGE_DIR=/storage on Railway for persisted sessions.');
-        }
-        if (puppeteerWanted && PUPPETEER_REFRESH_MS > 0) {
-            setInterval(() => {
-                schedulePuppeteerLogin('interval');
-            }, PUPPETEER_REFRESH_MS);
-            console.log(
-                '[chesspnt-wrapper] ChessPNT Puppeteer refresh every',
-                Math.round(PUPPETEER_REFRESH_MS / 3600000),
-                'h (CHESSPNT_PUPPETEER_REFRESH_MS)'
-            );
-        }
-    });
-}
+    // Never block listen() on Puppeteer — Railway treats slow open port as deploy failure.
+    if (puppeteerWanted) {
+        schedulePuppeteerLogin('startup')
+            .then(() => console.log('[chesspnt-wrapper] Puppeteer startup login finished'))
+            .catch(() => {});
+    }
 
-main().catch((err) => {
-    console.error(err);
+    if (puppeteerWanted && PUPPETEER_REFRESH_MS > 0) {
+        setInterval(() => {
+            schedulePuppeteerLogin('interval');
+        }, PUPPETEER_REFRESH_MS);
+        console.log(
+            '[chesspnt-wrapper] ChessPNT Puppeteer refresh every',
+            Math.round(PUPPETEER_REFRESH_MS / 3600000),
+            'h (CHESSPNT_PUPPETEER_REFRESH_MS)'
+        );
+    }
+});
+
+server.on('error', (err) => {
+    console.error('[chesspnt-wrapper] Server failed to start:', err);
     process.exit(1);
 });
