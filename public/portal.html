@@ -120,6 +120,13 @@
         let currentCatIndex = 0;
         let isConnecting = false;
 
+        /** Browser console breadcrumbs when automating ChessPNT (Codex / recommended instances) from this page. Filter: ChessGPT-Portal */
+        function portalConnectLog(phase, message, payload) {
+            const line = '[ChessGPT-Portal › Connect] [' + phase + '] ' + message;
+            if (payload !== undefined) console.info(line, payload);
+            else console.info(line);
+        }
+
         cardsContainer.addEventListener('click', (e) => {
             if (e.target.classList.contains('card-btn')) {
                 if (isConnecting) return;
@@ -133,6 +140,11 @@
                 if (isDirect) {
                     const url = cardEl.getAttribute('data-url');
                     const token = cardEl.getAttribute('data-token');
+                    portalConnectLog('DIRECT_TAB', 'Opening direct link (no ChessPNT iframe automation)', {
+                        portalCategory: targetCat,
+                        url: url,
+                        copiedAccessTokenLen: token ? token.length : 0,
+                    });
                     if (token) {
                         const tempInput = document.createElement('input');
                         tempInput.value = token;
@@ -153,44 +165,136 @@
                 }
                 
                 btn.textContent = "Connecting...";
+                let iframeHref = iframe.src || '';
+                try {
+                    iframeHref = iframe.contentWindow.location.href || iframeHref;
+                } catch (eIframeLoc) {}
+                portalConnectLog('START', 'Connect Session clicked — automating ChessPNT dashboard iframe (Codex/recommended lane)', {
+                    expectedCategoryTabSubstring: targetCat,
+                    exactInstanceTitle: title,
+                    iframeInitially: iframeHref,
+                    tip: 'We first click the matching category tab, then locate a row whose label exactly equals exactInstanceTitle, then click the Sass/Plus/Pro card wrapper and inner link/button.',
+                });
                 try {
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc) {
+                    if (!doc) {
+                        portalConnectLog('CATEGORY_TAB', 'Cannot access iframe document (blocked or empty). Retry after /list finishes loading.', { targetCat: targetCat });
+                    } else {
                         const spans = Array.from(doc.querySelectorAll('span, div, a'));
                         const targetEl = spans.find(s => s.textContent.includes(targetCat));
-                        if (targetEl) targetEl.click();
+                        if (targetEl) {
+                            targetEl.click();
+                            portalConnectLog('CATEGORY_TAB', 'Clicked category tab/control matching substring.', {
+                                targetCat: targetCat,
+                                clickedTag: targetEl.tagName,
+                                snippet: (targetEl.textContent || '').trim().slice(0, 120),
+                            });
+                        } else {
+                            portalConnectLog('CATEGORY_TAB', 'FAILED: no clickable element contained expected category substring. Wrong dashboard state or UI language change?', {
+                                targetCat: targetCat,
+                                sampledSpanCount: spans.length,
+                                hint: 'Open /list/#/home in this host manually and confirm this tab exists (e.g. Claude+GPT, Gemini…).',
+                            });
+                        }
                     }
-                } catch(err) { console.warn("Switch failed", err); }
+                } catch (err) {
+                    portalConnectLog('CATEGORY_TAB', 'EXCEPTION while switching category.', { message: err.message, targetCat: targetCat });
+                }
                 
                 let attempts = 0;
                 const poll = setInterval(() => {
                     attempts++;
                     try {
                         const doc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (!doc) return;
+                        if (!doc) {
+                            if (attempts === 10 || attempts === 20)
+                                portalConnectLog('POLL', 'No iframe document yet (attempt ' + attempts + '/30).');
+                            if (attempts > 30) {
+                                clearInterval(poll);
+                                portalConnectLog('OPEN_FAIL', 'Timeout: iframe document never became readable (cross-origin, crash, or blocked).', {
+                                    categoryTabSubstring: targetCat,
+                                    exactInstanceTitle: title,
+                                    iframeSrcAttr: iframe.src,
+                                });
+                                btn.textContent = "Error";
+                                setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
+                            }
+                            return;
+                        }
                         const allDivs = Array.from(doc.querySelectorAll('div, h3, span, p'));
                         const instanceEl = allDivs.find(el => el.textContent.trim() === title);
+                        if (attempts === 1)
+                            portalConnectLog('POLL', 'Watching iframe for row with exact title (case/whitespace-sensitive). Scanning DOM…', {
+                                title: title,
+                                candidateElementsScanned: allDivs.length,
+                            });
+                        if (attempts === 10 || attempts === 20)
+                            portalConnectLog('POLL', 'Still searching for matching row.', { attempts: attempts, exactInstanceTitle: title });
                         if (instanceEl) {
                             clearInterval(poll);
                             let container = instanceEl.parentElement;
-                            for(let i=0; i<4; i++) {
-                                if(container && (container.textContent.includes('Sass') || container.textContent.includes('Plus') || container.textContent.includes('Pro'))) {
+                            let opened = false;
+                            for (let depth = 0; depth < 4; depth++) {
+                                if (container && (container.textContent.includes('Sass') || container.textContent.includes('Plus') || container.textContent.includes('Pro'))) {
                                     container.click();
                                     const link = container.querySelector('a, button');
-                                    if(link) link.click();
+                                    if (link) {
+                                        link.click();
+                                        portalConnectLog('OPEN', 'Opened session: clicked card container + inner link/button.', {
+                                            exactInstanceTitle: title,
+                                            categoryTab: targetCat,
+                                            depthFromLabel: depth,
+                                            innerTag: link.tagName,
+                                        });
+                                    } else {
+                                        portalConnectLog('OPEN', 'Clicked card container only (no nested a/button found — SPA may rely on outer click only).', {
+                                            exactInstanceTitle: title,
+                                            categoryTab: targetCat,
+                                            depthFromLabel: depth,
+                                        });
+                                    }
                                     btn.textContent = "Session Opened!";
                                     setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 3000);
+                                    opened = true;
                                     break;
                                 }
                                 container = container.parentElement;
                             }
-                        } else if (attempts > 30) { clearInterval(poll); btn.textContent = "Error"; setTimeout(() => { isConnecting = false; }, 2000); }
-                    } catch(err) { console.warn("Poll failed", err); }
+                            if (!opened) {
+                                portalConnectLog('OPEN_FAIL', 'Found label text but no Sass/Plus/Pro ancestor within 4 parent levels.', {
+                                    exactInstanceTitle: title,
+                                    suggestion: 'ChessPNT changed card DOM. Inspect iframe element for this row in DevTools.',
+                                });
+                                btn.textContent = "Error";
+                                setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
+                            }
+                        } else if (attempts > 30) {
+                            clearInterval(poll);
+                            portalConnectLog('OPEN_FAIL', 'Timeout after 30×100ms: no element with trim(text)===exact title. ChessPNT not ready, proxy 502 fragment, or title mismatch.', {
+                                exactInstanceTitle: title,
+                                categoryTabSubstring: targetCat,
+                                sampledElements: allDivs.length,
+                                hint: 'Check Network tab on parent page for wrapper 502 JSON. Confirm iframe shows /list dashboard and instance id still matches data-title scraped earlier.',
+                            });
+                            btn.textContent = "Error";
+                            setTimeout(() => { isConnecting = false; }, 2000);
+                        }
+                    } catch (err) {
+                        portalConnectLog('POLL', 'EXCEPTION in poll iteration ' + attempts + '.', { message: err.message });
+                    }
                 }, 100);
             }
         });
 
         iframe.onload = () => {
+            let iframeLoc = iframe.src || '';
+            try {
+                iframeLoc = iframe.contentWindow.location.href || iframeLoc;
+            } catch (e0) {}
+            portalConnectLog('IFRAME', 'ChessPNT iframe load/navigation finished', {
+                effectiveUrl: iframeLoc,
+                note: 'If you see recurring loads after Connect, the SPA or session link may be redirecting.',
+            });
             setInterval(() => {
                 if (isConnecting) return;
                 const currentCat = categories[currentCatIndex];
