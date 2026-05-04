@@ -67,12 +67,12 @@
             { name: 'Grok', target: 'Grok', logo: 'grok.png' },
             { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
             { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/', token: 'perplexity-30-10-cdk|706323' },
-            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: '/qwen/' }
+            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' }
         ];
         const allInstances = {
             'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
             'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/?chessgpt_autoppx=1#/', token: 'perplexity-30-10-cdk|706323' }],
-            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: '/qwen/' }]
+            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }]
         };
         let currentCatIndex = 0;
         let isConnecting = false;
@@ -210,9 +210,9 @@
                     <div class="session-warning">
                         <strong>ChessPNT session not loading.</strong>
                         ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
-                        If you only see Perplexity and Qwen, the ChessPNT session failed — enable server-side login with
-                        <code>CHESSPNT_USE_PUPPETEER=1</code> plus <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code>, or refresh
-                        <code>CHESSPNT_PROXY_COOKIES</code> / volume files under <code>PERSISTENT_STORAGE_DIR</code>.
+                        If you only see Perplexity and Qwen, the ChessPNT session failed — set
+                        <code>CHESSPNT_USE_PUPPETEER=1</code> with <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code> (or <code>CHESSGPT_*</code> aliases), or refresh cookies on the volume.
+                        Open <code>/health</code> on this host to see Puppeteer status and <code>lastPuppeteerError</code> without reading Railway logs.
                     </div>`;
             }
             categories.forEach(cat => {

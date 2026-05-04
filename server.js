@@ -10,7 +10,7 @@ app.use(cors());
 
 /** Railway volume mount (e.g. /storage). Unset = read/write next to server.js. */
 const DATA_DIR = process.env.PERSISTENT_STORAGE_DIR
-    ? path.resolve(process.env.PERSISTENT_STORAGE_DIR)
+    ? path.resolve(String(process.env.PERSISTENT_STORAGE_DIR).trim())
     : __dirname;
 
 if (process.env.PERSISTENT_STORAGE_DIR) {
@@ -68,14 +68,27 @@ function readInitialLocalStorage() {
         }
     }
     const fromFile = readJsonFileIfExists(chesspntLsPath);
-    if (fromFile) return fromFile;
+    if (
+        fromFile &&
+        typeof fromFile.accessToken === 'string' &&
+        fromFile.accessToken.length > 40
+    ) {
+        return fromFile;
+    }
+    if (fromFile) {
+        console.warn('[chesspnt-wrapper] Ignoring invalid chesspnt_localstorage.json on disk (no accessToken); using defaults until Puppeteer succeeds.');
+    }
     return defaultLocalStorageData;
 }
 
 function readInitialCookies() {
-    if (process.env.CHESSPNT_PROXY_COOKIES) return process.env.CHESSPNT_PROXY_COOKIES;
+    const fromEnv = process.env.CHESSPNT_PROXY_COOKIES;
+    if (fromEnv && fromEnv.trim()) return fromEnv.trim();
     const fromFile = readTextFileIfExists(chesspntCookiesPath);
-    if (fromFile) return fromFile;
+    if (fromFile && fromFile.includes('=') && fromFile.length > 40) return fromFile;
+    if (fromFile) {
+        console.warn('[chesspnt-wrapper] Ignoring short/invalid chesspnt_proxy_cookies.txt on disk; using baked-in defaults until Puppeteer succeeds.');
+    }
     return defaultCookies;
 }
 
@@ -95,10 +108,20 @@ function envBool(name, defaultFalse = false) {
 
 const USE_PUPPETEER_LOGIN =
     envBool('CHESSPNT_USE_PUPPETEER') ||
+    envBool('CHESSGPT_USE_PUPPETEER') ||
     envBool('CHESSPNT_PUPPETEER_LOGIN') ||
-    envBool('CHESSPNT_AUTO_LOGIN');
-const PUPPETEER_USER = process.env.CHESSPNT_USERNAME || '';
-const PUPPETEER_PASS = process.env.CHESSPNT_PASSWORD || '';
+    envBool('CHESSPNT_AUTO_LOGIN') ||
+    envBool('CHESSGPT_AUTO_LOGIN');
+const PUPPETEER_USER = (
+    process.env.CHESSPNT_USERNAME ||
+    process.env.CHESSGPT_USERNAME ||
+    ''
+).trim();
+const PUPPETEER_PASS = (
+    process.env.CHESSPNT_PASSWORD ||
+    process.env.CHESSGPT_PASSWORD ||
+    ''
+).trim();
 const PUPPETEER_REFRESH_MS = parseInt(process.env.CHESSPNT_PUPPETEER_REFRESH_MS || String(4 * 60 * 60 * 1000), 10);
 
 const puppeteerWanted = USE_PUPPETEER_LOGIN && PUPPETEER_USER && PUPPETEER_PASS && !cookiesFromEnv;
@@ -128,8 +151,18 @@ function persistChesspntSessionToDisk() {
 
 let puppeteerLoginInFlight = null;
 
+/** For GET /health — no secrets, only lengths and last Puppeteer outcome. */
+const chesspntSessionMeta = {
+    lastAttemptAt: null,
+    lastAttemptReason: null,
+    lastOkAt: null,
+    lastError: null,
+};
+
 async function runChesspntPuppeteerLogin(reason) {
     if (!puppeteerWanted) return false;
+    chesspntSessionMeta.lastAttemptAt = new Date().toISOString();
+    chesspntSessionMeta.lastAttemptReason = String(reason || '');
     const { loginChesspntSession } = require('./chesspnt_puppeteer_login');
     console.log('[chesspnt-wrapper] ChessPNT Puppeteer login:', reason || 'refresh');
     const { cookieHeader, localStorageObj } = await loginChesspntSession({
@@ -140,6 +173,8 @@ async function runChesspntPuppeteerLogin(reason) {
     });
     sessionCookies = cookieHeader;
     sessionLocalStorage = localStorageObj;
+    chesspntSessionMeta.lastOkAt = new Date().toISOString();
+    chesspntSessionMeta.lastError = null;
     try {
         persistChesspntSessionToDisk();
         console.log('[chesspnt-wrapper] Session saved to', DATA_DIR);
@@ -154,6 +189,7 @@ function schedulePuppeteerLogin(reason) {
     if (puppeteerLoginInFlight) return puppeteerLoginInFlight;
     puppeteerLoginInFlight = runChesspntPuppeteerLogin(reason)
         .catch((e) => {
+            chesspntSessionMeta.lastError = String(e.message || e);
             console.error('[chesspnt-wrapper] Puppeteer login failed:', e.message || e);
         })
         .finally(() => {
@@ -174,6 +210,22 @@ try {
 } catch (e) {
     console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', e.message);
 }
+
+app.get('/health', (req, res) => {
+    const at = sessionLocalStorage && sessionLocalStorage.accessToken;
+    res.json({
+        ok: true,
+        proxyTarget: PROXY_TARGET,
+        dataDir: DATA_DIR,
+        puppeteerWanted,
+        cookieHeaderLength: sessionCookies ? sessionCookies.length : 0,
+        hasAccessToken: typeof at === 'string' && at.length > 20,
+        lastPuppeteerAttemptAt: chesspntSessionMeta.lastAttemptAt,
+        lastPuppeteerAttemptReason: chesspntSessionMeta.lastAttemptReason,
+        lastPuppeteerOkAt: chesspntSessionMeta.lastOkAt,
+        lastPuppeteerError: chesspntSessionMeta.lastError,
+    });
+});
 
 app.get('/', (req, res) => {
     try {

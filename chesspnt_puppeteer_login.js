@@ -1,12 +1,9 @@
+const path = require('path');
 const puppeteer = require('puppeteer');
 
 /**
  * Logs into ChessPNT (棋点) SPA and returns Cookie header string + localStorage snapshot.
- * @param {object} opts
- * @param {string} opts.baseUrl - e.g. https://chat.chesspnt.com
- * @param {string} opts.username
- * @param {string} opts.password
- * @param {number} [opts.stepTimeoutMs=120000]
+ * Uses domcontentloaded (not networkidle2) — SPAs often never go idle on Railway.
  */
 async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs = 120000 }) {
     if (!baseUrl || !username || !password) {
@@ -15,8 +12,13 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
 
     const origin = baseUrl.replace(/\/$/, '');
     const loginUrl = `${origin}/list/#/login`;
+    const dataDir = process.env.PERSISTENT_STORAGE_DIR
+        ? path.resolve(String(process.env.PERSISTENT_STORAGE_DIR).trim())
+        : __dirname;
 
-    const execPath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+    const bundled = typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : undefined;
+    const execPath = process.env.PUPPETEER_EXECUTABLE_PATH || bundled || undefined;
+
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: execPath,
@@ -25,27 +27,30 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--window-size=1280,800',
+            '--disable-software-rasterizer',
+            '--disable-extensions',
+            '--no-first-run',
+            '--window-size=1280,900',
         ],
     });
 
+    let page;
     try {
-        const page = await browser.newPage();
+        page = await browser.newPage();
         page.setDefaultTimeout(stepTimeoutMs);
         page.setDefaultNavigationTimeout(stepTimeoutMs);
 
-        await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: stepTimeoutMs });
-
+        await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: stepTimeoutMs });
         await page.waitForSelector('#username', { visible: true, timeout: 60000 });
         await page.waitForSelector('#password', { visible: true, timeout: 60000 });
 
         await page.click('#username', { clickCount: 3 });
         await page.keyboard.press('Backspace');
-        await page.type('#username', username, { delay: 15 });
+        await page.type('#username', username, { delay: 12 });
 
         await page.click('#password', { clickCount: 3 });
         await page.keyboard.press('Backspace');
-        await page.type('#password', password, { delay: 15 });
+        await page.type('#password', password, { delay: 12 });
 
         const agree = await page.$('#agree-terms');
         if (agree) {
@@ -55,12 +60,24 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
 
         await page.click('button[type="submit"]');
 
-        await page.waitForFunction(
-            () => Boolean(window.localStorage && window.localStorage.getItem('accessToken')),
-            { timeout: stepTimeoutMs }
-        );
+        try {
+            await page.waitForFunction(
+                () => Boolean(window.localStorage && window.localStorage.getItem('accessToken')),
+                { timeout: stepTimeoutMs, polling: 500 }
+            );
+        } catch (waitErr) {
+            const snippet = await page
+                .evaluate(() => (document.body && document.body.innerText ? document.body.innerText.slice(0, 800) : ''))
+                .catch(() => '');
+            try {
+                await page.screenshot({ path: path.join(dataDir, 'chesspnt_login_fail.png') });
+            } catch (_) {}
+            throw new Error(
+                `accessToken not set after submit (${waitErr.message || waitErr}). Page text (truncated): ${snippet.replace(/\s+/g, ' ').slice(0, 400)}`
+            );
+        }
 
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1200));
 
         const cookies = await page.cookies();
         const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
@@ -82,7 +99,9 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
 
         return { cookieHeader, localStorageObj };
     } finally {
-        await browser.close();
+        try {
+            await browser.close();
+        } catch (_) {}
     }
 }
 
