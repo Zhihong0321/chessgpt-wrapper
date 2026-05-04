@@ -169,12 +169,21 @@
         }
 
         cardsContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('card-btn')) {
-                if (isConnecting) return;
-                isConnecting = true;
-                const btn = e.target;
-                const cardEl = btn.closest('.mobile-card');
-                const targetCat = cardEl.getAttribute('data-target');
+            let t = e.target;
+            if (t && t.nodeType !== 1) t = t.parentElement;
+            const btn = t && typeof t.closest === 'function' ? t.closest('.card-btn') : null;
+            if (!btn) return;
+            const cardEl = btn.closest('.mobile-card');
+            if (!cardEl) {
+                portalConnectLog('CLICK', 'Ignored: .card-btn is not inside .mobile-card (stale DOM?)');
+                return;
+            }
+            if (isConnecting) {
+                portalConnectLog('CLICK', 'Ignored: previous Connect still running (wait or reload if stuck).');
+                return;
+            }
+            isConnecting = true;
+            const targetCat = cardEl.getAttribute('data-target');
                 const title = cardEl.getAttribute('data-title');
                 const isDirect = cardEl.getAttribute('data-direct') === 'true';
                 
@@ -351,13 +360,12 @@
                                 hint: 'Check Network tab on parent page for wrapper 502 JSON. Confirm iframe shows /list dashboard and instance id still matches data-title scraped earlier.',
                             });
                             btn.textContent = "Error";
-                            setTimeout(() => { isConnecting = false; }, 2000);
+                            setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
                         }
                     } catch (err) {
                         portalConnectLog('POLL', 'EXCEPTION in poll iteration ' + attempts + '.', { message: err.message });
                     }
                 }, 100);
-            }
         });
 
         iframe.onload = () => {
@@ -471,7 +479,7 @@
                                     <div class="status-dot"></div>
                                     <span>${card.status} - ${card.isDirect ? 'Direct Access' : 'Recommended'}</span>
                                 </div>
-                                <button class="card-btn">${card.isDirect ? 'Open Instance' : 'Connect Session'}</button>
+                                <button type="button" class="card-btn">${card.isDirect ? 'Open Instance' : 'Connect Session'}</button>
                             </div>
                         `;
                     });
