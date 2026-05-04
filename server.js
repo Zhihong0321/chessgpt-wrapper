@@ -163,6 +163,14 @@ const PUPPETEER_REFRESH_MS = parseInt(process.env.CHESSPNT_PUPPETEER_REFRESH_MS 
 
 const puppeteerWanted = USE_PUPPETEER_LOGIN && PUPPETEER_USER && PUPPETEER_PASS && !cookiesFromEnv;
 
+/**
+ * Chat is behind Cloudflare: clearance cookies tie to the IP that passed the challenge. A session captured
+ * on your laptop is invalid when the server exits from Railway → “Max challenge attempts exceeded”.
+ * Default: disable reverse proxy; portal opens https://chat.deepseek.com directly (same idea as Qwen).
+ * Enable only after refreshing deepseek_session.json from Puppeteer running with THIS host’s egress IP.
+ */
+const USE_DEEPSEEK_PROXY = envBool('DEEPSEEK_USE_PROXY') || envBool('CHESSGPT_DEEPSEEK_USE_PROXY');
+
 if (!cookiesFromEnv && !cookiesFromFile && !puppeteerWanted) {
     console.warn(
         '[chesspnt-wrapper] No ChessPNT cookies: set CHESSPNT_USE_PUPPETEER=1 with CHESSPNT_USERNAME/PASSWORD, or CHESSPNT_PROXY_COOKIES, or chesspnt_proxy_cookies.txt on the volume.'
@@ -298,6 +306,7 @@ app.get('/health', (req, res) => {
         proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
         proxyQwenLastFailure: healthState.proxyQwenLastFailure,
         proxyDeepseekLastFailure: healthState.proxyDeepseekLastFailure,
+        deepseekUseProxy: USE_DEEPSEEK_PROXY,
         dnsIpv4First: dnsIpv4FirstApplied,
         probeChesspntOutbound: '/api/probe-chesspnt-outbound',
     });
@@ -613,7 +622,21 @@ const deepseekProxyOptions = {
     cookieDomainRewrite: { '*': '' },
 };
 
-app.use(createProxyMiddleware(deepseekProxyOptions));
+if (USE_DEEPSEEK_PROXY) {
+    app.use(createProxyMiddleware(deepseekProxyOptions));
+} else {
+    app.use((req, res, next) => {
+        const p = req.path || '';
+        if (p !== '/deepseek' && !p.startsWith('/deepseek/')) return next();
+        const inner = p === '/deepseek' || p === '/deepseek/' ? '/' : p.slice('/deepseek'.length) || '/';
+        const pathPart = inner.startsWith('/') ? inner : `/${inner}`;
+        const base = DEEPSEEK_TARGET.replace(/\/$/, '');
+        const qi = req.url.indexOf('?');
+        const qs = qi !== -1 ? req.url.slice(qi) : '';
+        res.redirect(302, `${base}${pathPart}${qs}`);
+    });
+}
+
 app.use('/qwen', createProxyMiddleware(qwenProxyOptions));
 app.use('/', createProxyMiddleware(proxyOptions));
 
@@ -624,6 +647,11 @@ const LISTEN_HOST = process.env.HOST || '0.0.0.0';
 const server = app.listen(PORT, LISTEN_HOST, () => {
     console.log(`Team Proxy Server listening on http://${LISTEN_HOST}:${PORT}`);
     console.log('[chesspnt-wrapper] PROXY_TIMEOUT_MS (hardcoded)=', PROXY_TIMEOUT_MS);
+    if (!USE_DEEPSEEK_PROXY) {
+        console.log(
+            '[chesspnt-wrapper] DeepSeek: /deepseek → redirect to chat.deepseek.com (set DEEPSEEK_USE_PROXY=1 to proxy; session cookies must match this server egress IP).'
+        );
+    }
     if (!process.env.PERSISTENT_STORAGE_DIR) {
         console.log('[chesspnt-wrapper] Tip: set PERSISTENT_STORAGE_DIR=/storage on Railway for persisted sessions.');
     }

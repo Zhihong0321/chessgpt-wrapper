@@ -47,7 +47,7 @@
 <body>
     <div class="mobile-header"><h1>Team Portal</h1></div>
     <nav class="front-quick-links" aria-label="Quick links">
-        <a href="/deepseek/" target="_blank" rel="noopener noreferrer">Open DeepSeek</a>
+        <a href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">Open DeepSeek</a>
     </nav>
     <div id="mobile-cards" class="card-container">
         <div class="loading-container">
@@ -107,13 +107,13 @@
             { name: 'Gemini', target: 'Gemini', logo: 'gemini.png' },
             { name: 'Grok', target: 'Grok', logo: 'grok.png' },
             { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
-            { name: 'DeepSeek', target: 'DeepSeek', logo: 'deepseek.png', isDirect: true, url: '/deepseek/' },
+            { name: 'DeepSeek', target: 'DeepSeek', logo: 'deepseek.png', isDirect: true, url: 'https://chat.deepseek.com/' },
             { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
             { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' }
         ];
         const allInstances = {
             'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
-            'DeepSeek': [{ id: 'DeepSeek-Proxy', title: 'DeepSeek (team session)', status: 'Idle', badge: 'Team', target: 'DeepSeek', isDirect: true, url: '/deepseek/' }],
+            'DeepSeek': [{ id: 'DeepSeek-Direct', title: 'DeepSeek Chat', status: 'Idle', badge: 'Direct', target: 'DeepSeek', isDirect: true, url: 'https://chat.deepseek.com/' }],
             'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
             'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }]
         };
