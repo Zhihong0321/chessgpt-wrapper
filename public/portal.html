@@ -127,6 +127,47 @@
             else console.info(line);
         }
 
+        /** Puppeteer on the server only logs into ChessPNT to refresh cookies — it never runs when you press Connect. Prefer a real <a href> when the SPA exposes one. */
+        function extractSessionUrlsFromCard(cardRoot, baseHref) {
+            const absList = [];
+            const seenA = new WeakSet();
+            function pushFromAnchor(a) {
+                if (!a || seenA.has(a)) return;
+                seenA.add(a);
+                const raw = (a.getAttribute('href') || '').trim();
+                if (!raw || raw === '#' || /^javascript:/i.test(raw)) return;
+                try {
+                    absList.push(new URL(raw, baseHref).href);
+                } catch (e) {}
+            }
+            if (cardRoot.querySelectorAll)
+                cardRoot.querySelectorAll('a[href]').forEach(pushFromAnchor);
+            let p = cardRoot;
+            for (let i = 0; i < 6 && p; i++) {
+                if (p.matches && p.matches('a[href]')) pushFromAnchor(p);
+                p = p.parentElement;
+            }
+            return absList;
+        }
+        function pickBestSessionUrl(absList) {
+            if (!absList || !absList.length) return null;
+            const lowered = absList.map(function (u) {
+                return u.toLowerCase();
+            });
+            var i;
+            for (i = 0; i < lowered.length; i++)
+                if (
+                    lowered[i].indexOf('codex') >= 0 ||
+                    lowered[i].indexOf('session') >= 0 ||
+                    lowered[i].indexOf('chat') >= 0 ||
+                    lowered[i].indexOf('/list/') >= 0
+                )
+                    return absList[i];
+            return absList.reduce(function (best, u) {
+                return u.length > best.length ? u : best;
+            });
+        }
+
         cardsContainer.addEventListener('click', (e) => {
             if (e.target.classList.contains('card-btn')) {
                 if (isConnecting) return;
@@ -169,11 +210,11 @@
                 try {
                     iframeHref = iframe.contentWindow.location.href || iframeHref;
                 } catch (eIframeLoc) {}
-                portalConnectLog('START', 'Connect Session clicked — automating ChessPNT dashboard iframe (Codex/recommended lane)', {
+                portalConnectLog('START', 'Connect Session clicked — ChessPNT iframe flow (not Puppeteer; server Puppeteer is only for renewing login cookies).', {
                     expectedCategoryTabSubstring: targetCat,
                     exactInstanceTitle: title,
                     iframeInitially: iframeHref,
-                    tip: 'We first click the matching category tab, then locate a row whose label exactly equals exactInstanceTitle, then click the Sass/Plus/Pro card wrapper and inner link/button.',
+                    tip: 'We switch category in the iframe, find the row title, then prefer window.open(<a href>) on the same Railway origin if the card exposes a link; otherwise we fall back to synthetic clicks.',
                 });
                 try {
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
@@ -236,22 +277,55 @@
                             let opened = false;
                             for (let depth = 0; depth < 4; depth++) {
                                 if (container && (container.textContent.includes('Sass') || container.textContent.includes('Plus') || container.textContent.includes('Pro'))) {
-                                    container.click();
-                                    const link = container.querySelector('a, button');
-                                    if (link) {
-                                        link.click();
-                                        portalConnectLog('OPEN', 'Opened session: clicked card container + inner link/button.', {
-                                            exactInstanceTitle: title,
-                                            categoryTab: targetCat,
-                                            depthFromLabel: depth,
-                                            innerTag: link.tagName,
-                                        });
+                                    const iframeWin = doc.defaultView || iframe.contentWindow;
+                                    const baseHref = iframeWin.location.href;
+                                    const hrefCandidates = extractSessionUrlsFromCard(container, baseHref);
+                                    const picked = pickBestSessionUrl(hrefCandidates);
+                                    let openedViaUrl = false;
+                                    if (picked) {
+                                        try {
+                                            if (new URL(picked).origin === window.location.origin) {
+                                                window.open(picked, '_blank', 'noopener,noreferrer');
+                                                openedViaUrl = true;
+                                                portalConnectLog('OPEN', 'Opened new tab using link URL from card (same proxy origin — keeps session cookies).', {
+                                                    exactInstanceTitle: title,
+                                                    categoryTab: targetCat,
+                                                    depthFromLabel: depth,
+                                                    url: picked,
+                                                });
+                                            } else {
+                                                portalConnectLog('OPEN', 'Ignored off-origin <a href> (would bypass proxy cookies); using synthetic clicks.', {
+                                                    href: picked,
+                                                    proxyOrigin: window.location.origin,
+                                                });
+                                            }
+                                        } catch (eUrl) {
+                                            portalConnectLog('OPEN', 'Could not parse card link; using synthetic clicks.', { message: eUrl.message });
+                                        }
                                     } else {
-                                        portalConnectLog('OPEN', 'Clicked card container only (no nested a/button found — SPA may rely on outer click only).', {
+                                        portalConnectLog('OPEN', 'No usable <a href> on card subtree; using synthetic clicks.', {
                                             exactInstanceTitle: title,
-                                            categoryTab: targetCat,
-                                            depthFromLabel: depth,
+                                            usableResolvedUrlsFound: hrefCandidates.length,
                                         });
+                                    }
+                                    if (!openedViaUrl) {
+                                        container.click();
+                                        const link = container.querySelector('a, button');
+                                        if (link) {
+                                            link.click();
+                                            portalConnectLog('OPEN', 'Fallback: clicked card container + nested control.', {
+                                                exactInstanceTitle: title,
+                                                categoryTab: targetCat,
+                                                depthFromLabel: depth,
+                                                innerTag: link.tagName,
+                                            });
+                                        } else {
+                                            portalConnectLog('OPEN', 'Fallback: clicked card container only (no nested a/button).', {
+                                                exactInstanceTitle: title,
+                                                categoryTab: targetCat,
+                                                depthFromLabel: depth,
+                                            });
+                                        }
                                     }
                                     btn.textContent = "Session Opened!";
                                     setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 3000);
