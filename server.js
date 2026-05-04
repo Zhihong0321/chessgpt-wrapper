@@ -491,6 +491,72 @@ const qwenProxyOptions = {
 };
 
 const DEEPSEEK_TARGET = 'https://chat.deepseek.com';
+
+/** Parse Cookie header values (best-effort) for merging server session + browser headers. */
+function parseCookieHeaderToMap(cookieHeader) {
+    const out = new Map();
+    if (!cookieHeader || typeof cookieHeader !== 'string') return out;
+    for (const part of cookieHeader.split(';')) {
+        const idx = part.indexOf('=');
+        if (idx === -1) continue;
+        const name = part.slice(0, idx).trim();
+        const value = part.slice(idx + 1).trim();
+        if (name) out.set(name, value);
+    }
+    return out;
+}
+
+function mergeCookieHeaderStrings(sessionCookieStr, incomingCookieHeader) {
+    const m = parseCookieHeaderToMap(sessionCookieStr || '');
+    for (const [k, v] of parseCookieHeaderToMap(incomingCookieHeader || '')) m.set(k, v);
+    const parts = [];
+    for (const [k, v] of m) parts.push(`${k}=${v}`);
+    return parts.join('; ');
+}
+
+function deepseekSessionCookieHeader() {
+    if (!deepseekSession || !deepseekSession.cookies) return '';
+    return deepseekSession.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+}
+
+/** Map https://our-host/deepseek/... → https://chat.deepseek.com/... for upstream Referer. */
+function rewriteDeepseekRefererForUpstream(clientRefererRaw) {
+    if (!clientRefererRaw || typeof clientRefererRaw !== 'string') return `${DEEPSEEK_TARGET}/`;
+    try {
+        const u = new URL(clientRefererRaw);
+        const p = u.pathname || '/';
+        if (p === '/deepseek' || p.startsWith('/deepseek/')) {
+            let inner = p.slice('/deepseek'.length) || '/';
+            if (!inner.startsWith('/')) inner = `/${inner}`;
+            return `${DEEPSEEK_TARGET}${inner}${u.search || ''}`;
+        }
+    } catch (_) {}
+    return `${DEEPSEEK_TARGET}/`;
+}
+
+/**
+ * DeepSeek’s SPA calls same-origin paths like /api/... at the site root. Under /deepseek only the first
+ * document load was proxied; API + assets then hit the ChessPNT proxy and Cloudflare saw broken sessions
+ * (“Max challenge attempts exceeded”). Route those paths to DeepSeek when the tab’s Referer is /deepseek.
+ */
+function deepseekPathFilter(pathname, req) {
+    if (pathname === '/deepseek' || pathname.startsWith('/deepseek/')) return true;
+    const ref = String(req.headers.referer || req.headers.referrer || '');
+    if (!ref.includes('/deepseek')) return false;
+    return (
+        pathname.startsWith('/api/') ||
+        pathname.startsWith('/_next/') ||
+        pathname.startsWith('/static/') ||
+        pathname.startsWith('/images/') ||
+        pathname.startsWith('/assets/') ||
+        pathname.startsWith('/cdn/') ||
+        pathname.startsWith('/locales/') ||
+        pathname === '/favicon.ico' ||
+        pathname.endsWith('/sw.js') ||
+        pathname.includes('workbox')
+    );
+}
+
 const deepseekProxyOptions = {
     target: DEEPSEEK_TARGET,
     changeOrigin: true,
@@ -499,13 +565,28 @@ const deepseekProxyOptions = {
     agent: deepseekOutboundAgent,
     proxyTimeout: PROXY_TIMEOUT_MS,
     timeout: PROXY_TIMEOUT_MS,
-    onProxyReq: (proxyReq, req, res) => {
-        if (deepseekSession && deepseekSession.cookies) {
-            const cookieStr = deepseekSession.cookies.map((c) => c.name + '=' + c.value).join('; ');
-            proxyReq.setHeader('Cookie', cookieStr);
+    pathFilter: deepseekPathFilter,
+    pathRewrite: (path) => {
+        const q = path.indexOf('?');
+        const pathnameOnly = q === -1 ? path : path.slice(0, q);
+        const search = q === -1 ? '' : path.slice(q);
+        if (pathnameOnly === '/deepseek' || pathnameOnly.startsWith('/deepseek/')) {
+            let inner = pathnameOnly.slice('/deepseek'.length) || '/';
+            if (!inner.startsWith('/')) inner = `/${inner}`;
+            return `${inner}${search}`;
         }
-        proxyReq.setHeader('Origin', 'https://chat.deepseek.com');
-        proxyReq.setHeader('Referer', 'https://chat.deepseek.com/');
+        return path;
+    },
+    onProxyReq: (proxyReq, req, res) => {
+        const merged = mergeCookieHeaderStrings(deepseekSessionCookieHeader(), req.headers.cookie);
+        if (merged) proxyReq.setHeader('Cookie', merged);
+        const ua = req.headers['user-agent'];
+        if (ua) proxyReq.setHeader('User-Agent', ua);
+        const lang = req.headers['accept-language'];
+        if (lang) proxyReq.setHeader('Accept-Language', lang);
+        proxyReq.setHeader('Origin', DEEPSEEK_TARGET);
+        const ref = req.headers.referer || req.headers.referrer;
+        proxyReq.setHeader('Referer', rewriteDeepseekRefererForUpstream(ref));
     },
     onProxyRes: (proxyRes, req, res) => {
         delete proxyRes.headers['content-security-policy'];
@@ -532,7 +613,7 @@ const deepseekProxyOptions = {
     cookieDomainRewrite: { '*': '' },
 };
 
-app.use('/deepseek', createProxyMiddleware(deepseekProxyOptions));
+app.use(createProxyMiddleware(deepseekProxyOptions));
 app.use('/qwen', createProxyMiddleware(qwenProxyOptions));
 app.use('/', createProxyMiddleware(proxyOptions));
 
