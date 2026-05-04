@@ -457,7 +457,6 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
     async function apiGet(path) {
         const r = await fetch(`${baseUrl}/client-api${path}`, { headers: hdrs, redirect: 'follow' });
         const text = await r.text();
-        console.log(`[chesspnt-wrapper] GET /client-api${path} => ${r.status}: ${text.slice(0, 200)}`);
         try { return { status: r.status, json: JSON.parse(text), text }; }
         catch (_) { return { status: r.status, json: null, text }; }
     }
@@ -466,7 +465,6 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
             method: 'POST', headers: hdrs, body: JSON.stringify(body), redirect: 'follow',
         });
         const text = await r.text();
-        console.log(`[chesspnt-wrapper] POST /client-api${path} => ${r.status}: ${text.slice(0, 200)}`);
         try { return { status: r.status, json: JSON.parse(text), text }; }
         catch (_) { return { status: r.status, json: null, text }; }
     }
@@ -476,6 +474,13 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
         if (result.json.data && typeof result.json.data === 'string') return result.json.data;
         return null;
     }
+    function noUrlError(label, r, suffix) {
+        const detail = `status=${r.status} body=${r.text.slice(0, 300)} parsed_suffix="${suffix}"`;
+        console.error(`[connect-session] ✗ ${label} — no URL in response. ${detail}`);
+        return res.status(502).json({ ok: false, error: `${label}: backend returned no session URL`, detail: r.text.slice(0, 300) });
+    }
+
+    console.log(`[connect-session] → carID=${carID} nodeType=${nodeType} planType=${planType}`);
 
     try {
         let sessionUrl = null;
@@ -483,53 +488,55 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
         if (nodeType === 'sass') {
             const r = await apiGet('/sass/logintoken');
             const suffix = extractData(r) || r.text.trim();
-            console.log(`[chesspnt-wrapper] sass logintoken raw => status=${r.status} text=${r.text.slice(0, 300)}`);
+            console.log(`[connect-session] sass logintoken: status=${r.status} body=${r.text.slice(0, 300)}`);
             if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
                 const base = (siteConfig.soruxGptSideBarUrl || 'https://gpt.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
             } else {
-                console.warn(`[chesspnt-wrapper] sass logintoken did not return a URL path — session likely expired. suffix="${suffix}"`);
+                return noUrlError('sass /logintoken', r, suffix);
             }
 
         } else if (nodeType === 'grok') {
             const isSuper = (planType || 0) >= 3 ? 'true' : 'false';
             const r = await apiGet(`/grok/loginToken?isSuper=${isSuper}`);
             const suffix = extractData(r) || r.text.trim();
-            console.log(`[chesspnt-wrapper] grok loginToken raw => status=${r.status} text=${r.text.slice(0, 300)} suffix="${suffix}"`);
+            console.log(`[connect-session] grok loginToken: status=${r.status} body=${r.text.slice(0, 300)}`);
             if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
                 const base = (siteConfig.grokUrl || 'https://grok.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
             } else {
-                console.warn(`[chesspnt-wrapper] grok loginToken did not return a URL. siteConfig.grokUrl="${siteConfig.grokUrl}"`);
+                return noUrlError('grok /loginToken', r, suffix);
             }
 
         } else if (nodeType === 'gemini') {
-            // usertoken must be the account USERNAME, not JWT
             const params = new URLSearchParams({ usertoken: username, carid: carID, isPlus: planType || 0 });
             const r = await apiGet(`/gemini/loginToken?${params}`);
             const suffix = extractData(r) || r.text.trim();
+            console.log(`[connect-session] gemini loginToken: status=${r.status} body=${r.text.slice(0, 300)}`);
             if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
                 const base = (siteConfig.geminiUrl || 'https://gemini.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            } else {
+                return noUrlError('gemini /loginToken', r, suffix);
             }
 
         } else if (nodeType === 'claude') {
-            // usertoken must be the account USERNAME, not JWT
             const params = new URLSearchParams({ usertoken: username, carid: carID, isPlus: planType || 0 });
             const r = await apiGet(`/claude/auth?${params}`);
-            // Returns a raw path string like /auth/logintoken?... (not JSON)
             const data = extractData(r) || r.text.trim();
+            console.log(`[connect-session] claude auth: status=${r.status} body=${r.text.slice(0, 300)}`);
             if (data && (data.startsWith('/') || data.startsWith('http'))) {
                 const claudeBase = (siteConfig.sxClaudeUrl || siteConfig.claudeUrl || 'https://claude.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = data.startsWith('http') ? data : claudeBase + data;
+            } else {
+                return noUrlError('claude /auth', r, data);
             }
-
 
         } else if (nodeType === 'perplexity') {
             const cdkUrl   = directUrl   || 'https://v.tuangouai.com/#/';
             const cdkToken = directToken || '';
             if (!cdkToken) return res.status(400).json({ ok: false, error: 'Missing token for perplexity.' });
-            console.log(`[chesspnt-wrapper] perplexity: launching puppeteer → ${cdkUrl}`);
+            console.log(`[connect-session] perplexity: launching puppeteer → ${cdkUrl}`);
             const { redeemCdkSession } = require('./chesspnt_puppeteer_login');
             const result = await redeemCdkSession({ url: cdkUrl, token: cdkToken });
             sessionUrl = result.url;
@@ -537,6 +544,7 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
         } else {
             // plus / claudeSaas / embedded
             const authR = await apiPost('/openai/auth', { usertoken: userToken, nodeType, carid: carID, planType: planType || 0 });
+            console.log(`[connect-session] openai auth: status=${authR.status} body=${authR.text.slice(0, 300)}`);
             const activeCarID = extractData(authR) || carID;
             const loginR = await fetch(`${baseUrl}/auth/login?carid=${encodeURIComponent(activeCarID)}`, {
                 method: 'POST',
@@ -544,23 +552,23 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
                 body: JSON.stringify({ usertoken: userToken, nodeType, carid: activeCarID, planType: planType || 0 }),
                 redirect: 'manual',
             });
-            console.log(`[chesspnt-wrapper] POST /auth/login => ${loginR.status}`);
+            const loginBody = await loginR.text().catch(() => '');
+            console.log(`[connect-session] auth/login: status=${loginR.status} body=${loginBody.slice(0, 300)}`);
             if (loginR.status >= 200 && loginR.status < 400) {
                 sessionUrl = '/list/#/home';
             } else {
-                const errBody = await loginR.text().catch(() => '');
-                return res.status(502).json({ ok: false, error: `auth/login returned ${loginR.status}`, body: errBody.slice(0, 200) });
+                return res.status(502).json({ ok: false, error: `auth/login returned ${loginR.status}`, detail: loginBody.slice(0, 300) });
             }
         }
 
         if (sessionUrl) {
-            console.log(`[chesspnt-wrapper] connect-session OK: nodeType=${nodeType} url=${sessionUrl}`);
+            console.log(`[connect-session] ✓ OK nodeType=${nodeType} url=${sessionUrl}`);
             return res.json({ ok: true, url: sessionUrl, nodeType });
         }
         return res.status(502).json({ ok: false, error: `No session URL for nodeType=${nodeType}` });
 
     } catch (err) {
-        console.error('[chesspnt-wrapper] /api/connect-session error:', err.message);
+        console.error(`[connect-session] ✗ exception: ${err.message}`);
         return res.status(502).json({ ok: false, error: err.message });
     }
 });
