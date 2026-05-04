@@ -47,8 +47,10 @@ function readJsonFileIfExists(filePath) {
 /** Upstream SPA (no trailing slash). Override on Railway if your login host changes. */
 const PROXY_TARGET = (process.env.CHESSPNT_PROXY_TARGET || 'https://chat.chesspnt.com').replace(/\/$/, '');
 
-/** Outbound ChessPNT / Qwen: reduce flaky ECONNRESET / socket hang-ups (e.g. long routes to chat.chesspnt.com). */
-const PROXY_TIMEOUT_MS = parseInt(process.env.CHESSPNT_PROXY_TIMEOUT_MS || String(5 * 60 * 1000), 10);
+/** Outbound ChessPNT / Qwen / DeepSeek: hardcoded limits for slow uplinks (http-proxy proxyTimeout + matching inbound timeouts below).
+ * Important: our JSON 502 `{ where: 'chesspnt reverse proxy' }` from proxy `onError` is usually connection reset/refused/TLS/DNS — not “timed out”.
+ * Raising this does not fix that class of failure; it only helps genuinely slow upstream first-byte/body delivery. */
+const PROXY_TIMEOUT_MS = 900000;
 function createKeepAliveAgent(useHttps) {
     const opts = {
         keepAlive: true,
@@ -61,6 +63,7 @@ function createKeepAliveAgent(useHttps) {
 }
 const chesspntOutboundAgent = createKeepAliveAgent(PROXY_TARGET.startsWith('https'));
 const qwenOutboundAgent = createKeepAliveAgent(true);
+const deepseekOutboundAgent = createKeepAliveAgent(true);
 
 // Fallback when no volume file, env, or Puppeteer (legacy / local dev)
 const defaultLocalStorageData = {
@@ -181,6 +184,7 @@ const healthState = {
     puppeteerLastFailure: null,
     proxyChesspntLastFailure: null,
     proxyQwenLastFailure: null,
+    proxyDeepseekLastFailure: null,
 };
 
 function logPuppeteerFailure(err) {
@@ -241,6 +245,25 @@ try {
     console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', formatErrorLogLine('[qwen session] ', e));
 }
 
+// DeepSeek session: prefer volume, then app directory (legacy path)
+let deepseekSession = null;
+try {
+    const paths = [
+        path.join(DATA_DIR, 'deepseek_session.json'),
+        path.join(__dirname, 'deepseek_session.json'),
+    ];
+    const sessionPath = paths.find((p) => fs.existsSync(p));
+    if (sessionPath) {
+        deepseekSession = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+        console.log('[chesspnt-wrapper] DeepSeek session loaded from', sessionPath);
+    }
+} catch (e) {
+    console.warn(
+        '[chesspnt-wrapper] DeepSeek session not found or invalid:',
+        formatErrorLogLine('[deepseek session] ', e)
+    );
+}
+
 function puppeteerLoginInFlightFlag() {
     return Boolean(puppeteerLoginInFlight);
 }
@@ -262,6 +285,7 @@ app.get('/health', (req, res) => {
         puppeteerLastFailure: healthState.puppeteerLastFailure,
         proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
         proxyQwenLastFailure: healthState.proxyQwenLastFailure,
+        proxyDeepseekLastFailure: healthState.proxyDeepseekLastFailure,
     });
 });
 
@@ -310,7 +334,8 @@ function recordProxyFailure(label, err, req, targetUrl) {
         error: serializeError(err),
     };
     if (label === 'chesspnt') healthState.proxyChesspntLastFailure = payload;
-    else healthState.proxyQwenLastFailure = payload;
+    else if (label === 'qwen') healthState.proxyQwenLastFailure = payload;
+    else if (label === 'deepseek') healthState.proxyDeepseekLastFailure = payload;
     console.error(`[chesspnt-wrapper] Proxy error (${label}):\n` + JSON.stringify(payload, null, 2));
 }
 
@@ -399,6 +424,49 @@ const qwenProxyOptions = {
     cookieDomainRewrite: { '*': '' },
 };
 
+const DEEPSEEK_TARGET = 'https://chat.deepseek.com';
+const deepseekProxyOptions = {
+    target: DEEPSEEK_TARGET,
+    changeOrigin: true,
+    ws: true,
+    xfwd: true,
+    agent: deepseekOutboundAgent,
+    proxyTimeout: PROXY_TIMEOUT_MS,
+    timeout: PROXY_TIMEOUT_MS,
+    onProxyReq: (proxyReq, req, res) => {
+        if (deepseekSession && deepseekSession.cookies) {
+            const cookieStr = deepseekSession.cookies.map((c) => c.name + '=' + c.value).join('; ');
+            proxyReq.setHeader('Cookie', cookieStr);
+        }
+        proxyReq.setHeader('Origin', 'https://chat.deepseek.com');
+        proxyReq.setHeader('Referer', 'https://chat.deepseek.com/');
+    },
+    onProxyRes: (proxyRes, req, res) => {
+        delete proxyRes.headers['content-security-policy'];
+        delete proxyRes.headers['x-frame-options'];
+    },
+    onError: (err, req, res, target) => {
+        recordProxyFailure('deepseek', err, req, String(target || DEEPSEEK_TARGET));
+        if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(
+                JSON.stringify(
+                    {
+                        where: 'deepseek reverse proxy',
+                        target: DEEPSEEK_TARGET,
+                        path: req && req.url,
+                        error: serializeError(err),
+                    },
+                    null,
+                    2
+                )
+            );
+        }
+    },
+    cookieDomainRewrite: { '*': '' },
+};
+
+app.use('/deepseek', createProxyMiddleware(deepseekProxyOptions));
 app.use('/qwen', createProxyMiddleware(qwenProxyOptions));
 app.use('/', createProxyMiddleware(proxyOptions));
 
@@ -408,6 +476,7 @@ const LISTEN_HOST = process.env.HOST || '0.0.0.0';
 
 const server = app.listen(PORT, LISTEN_HOST, () => {
     console.log(`Team Proxy Server listening on http://${LISTEN_HOST}:${PORT}`);
+    console.log('[chesspnt-wrapper] PROXY_TIMEOUT_MS (hardcoded)=', PROXY_TIMEOUT_MS);
     if (!process.env.PERSISTENT_STORAGE_DIR) {
         console.log('[chesspnt-wrapper] Tip: set PERSISTENT_STORAGE_DIR=/storage on Railway for persisted sessions.');
     }
@@ -430,6 +499,10 @@ const server = app.listen(PORT, LISTEN_HOST, () => {
         );
     }
 });
+
+/** Node 18+ defaults requestTimeout to 5m; bump so client→Railway connections can outlive slow ChessPNT upstreams. */
+server.requestTimeout = PROXY_TIMEOUT_MS + 120000;
+server.headersTimeout = PROXY_TIMEOUT_MS + 180000;
 
 server.on('error', (err) => {
     console.error('[chesspnt-wrapper] Server failed to start:\n' + JSON.stringify(serializeError(err), null, 2));
