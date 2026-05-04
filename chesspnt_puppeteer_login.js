@@ -27,8 +27,26 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
         ? path.resolve(String(process.env.PERSISTENT_STORAGE_DIR).trim())
         : __dirname;
 
-    const bundled = typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : undefined;
-    const execPath = process.env.PUPPETEER_EXECUTABLE_PATH || bundled || undefined;
+    const execPath = (() => {
+        const candidates = [
+            process.env.PUPPETEER_EXECUTABLE_PATH,
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+            '/snap/bin/chromium',
+        ].filter(Boolean);
+        for (const p of candidates) {
+            try { if (require('fs').existsSync(p)) { console.log('[puppeteer] using chrome at', p); return p; } } catch (_) {}
+        }
+        // Fall back to puppeteer's own bundled path (Chrome for Testing cache)
+        try {
+            const p = typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : null;
+            if (p) { console.log('[puppeteer] using bundled chrome at', p); return p; }
+        } catch (_) {}
+        console.warn('[puppeteer] no chrome found in known paths — letting puppeteer auto-detect');
+        return undefined;
+    })();
 
     const browser = await runStep('puppeteer.launch', () =>
         puppeteer.launch({
