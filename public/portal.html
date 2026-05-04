@@ -36,6 +36,8 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-text { color: #8a93a6; font-size: 16px; font-weight: 500; line-height: 1.5; }
         #dashboard-frame { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .session-warning { max-width: 500px; margin: 0 auto 24px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); color: #fecaca; font-size: 14px; line-height: 1.45; }
+        .session-warning strong { color: #fff; }
     </style>
 </head>
 <body>
@@ -201,6 +203,18 @@
             if (stateJson === lastRenderedJson) return;
             lastRenderedJson = stateJson;
             let html = '';
+            const chessBackedKeys = ['ChatGPT', 'Gemini', 'Grok', 'Claude'];
+            const chessBackedEmpty = chessBackedKeys.every((k) => !allInstances[k] || allInstances[k].length === 0);
+            if (chessBackedEmpty) {
+                html += `
+                    <div class="session-warning">
+                        <strong>ChessPNT session not loading.</strong>
+                        ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
+                        If you only see Perplexity and Qwen, the ChessPNT session failed — enable server-side login with
+                        <code>CHESSPNT_USE_PUPPETEER=1</code> plus <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code>, or refresh
+                        <code>CHESSPNT_PROXY_COOKIES</code> / volume files under <code>PERSISTENT_STORAGE_DIR</code>.
+                    </div>`;
+            }
             categories.forEach(cat => {
                 const cards = allInstances[cat.name];
                 if (cards && cards.length > 0) {

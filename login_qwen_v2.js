@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const path = require('path');
 
 (async () => {
     const browser = await puppeteer.launch({ 
@@ -44,8 +45,13 @@ const fs = require('fs');
             localStorage: JSON.parse(localStorage)
         };
         
-        fs.writeFileSync('qwen_session.json', JSON.stringify(sessionData, null, 2));
-        console.log('Session saved to qwen_session.json');
+        const outDir = process.env.PERSISTENT_STORAGE_DIR
+            ? path.resolve(process.env.PERSISTENT_STORAGE_DIR)
+            : process.cwd();
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outPath = path.join(outDir, 'qwen_session.json');
+        fs.writeFileSync(outPath, JSON.stringify(sessionData, null, 2));
+        console.log('Session saved to', outPath);
 
     } catch (error) {
         console.error('Error during login:', error);
