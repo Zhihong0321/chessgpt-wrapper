@@ -244,6 +244,13 @@
         };
 
         let lastRenderedJson = '';
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
         function renderUI() {
             if (allInstances['ChatGPT'].length === 0 && allInstances['Gemini'].length === 0 && allInstances['Grok'].length === 0 && allInstances['Claude'].length === 0 && allInstances['Qwen'].length === 0 && allInstances['Perplexity'].length === 0) return;
             const stateJson = JSON.stringify(allInstances);
@@ -276,14 +283,14 @@
                     cards.forEach(card => {
                         html += `
                             <div class="mobile-card" 
-                                 data-title="${card.title}" 
-                                 data-target="${card.target}"
+                                 data-title="${escapeHtml(card.title)}" 
+                                 data-target="${escapeHtml(card.target)}"
                                  data-direct="${card.isDirect || false}"
-                                 data-url="${card.url || ''}"
-                                 data-token="${card.token || ''}">
+                                 data-url="${escapeHtml(card.url || '')}"
+                                 data-token="${escapeHtml(card.token || '')}">
                                 <div class="card-header">
-                                    <div class="card-title">${card.title}</div>
-                                    <div class="card-badge">${card.badge}</div>
+                                    <div class="card-title">${escapeHtml(card.title)}</div>
+                                    <div class="card-badge">${escapeHtml(card.badge)}</div>
                                 </div>
                                 <div class="card-status status-${card.status.toLowerCase()}">
                                     <div class="status-dot"></div>

@@ -4,6 +4,8 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const { serializeError, formatErrorLogLine } = require('./serialize_error');
 
 const app = express();
@@ -44,6 +46,21 @@ function readJsonFileIfExists(filePath) {
 
 /** Upstream SPA (no trailing slash). Override on Railway if your login host changes. */
 const PROXY_TARGET = (process.env.CHESSPNT_PROXY_TARGET || 'https://chat.chesspnt.com').replace(/\/$/, '');
+
+/** Outbound ChessPNT / Qwen: reduce flaky ECONNRESET / socket hang-ups (e.g. long routes to chat.chesspnt.com). */
+const PROXY_TIMEOUT_MS = parseInt(process.env.CHESSPNT_PROXY_TIMEOUT_MS || String(5 * 60 * 1000), 10);
+function createKeepAliveAgent(useHttps) {
+    const opts = {
+        keepAlive: true,
+        keepAliveMsecs: 30000,
+        maxSockets: 80,
+        maxFreeSockets: 20,
+        timeout: PROXY_TIMEOUT_MS,
+    };
+    return useHttps ? new https.Agent(opts) : new http.Agent(opts);
+}
+const chesspntOutboundAgent = createKeepAliveAgent(PROXY_TARGET.startsWith('https'));
+const qwenOutboundAgent = createKeepAliveAgent(true);
 
 // Fallback when no volume file, env, or Puppeteer (legacy / local dev)
 const defaultLocalStorageData = {
@@ -233,6 +250,7 @@ app.get('/health', (req, res) => {
     res.json({
         ok: true,
         proxyTarget: PROXY_TARGET,
+        proxyTimeoutMs: PROXY_TIMEOUT_MS,
         dataDir: DATA_DIR,
         puppeteerWanted,
         puppeteerLoginInFlight: puppeteerLoginInFlightFlag(),
@@ -300,6 +318,10 @@ const proxyOptions = {
     target: PROXY_TARGET,
     changeOrigin: true,
     ws: true,
+    xfwd: true,
+    agent: chesspntOutboundAgent,
+    proxyTimeout: PROXY_TIMEOUT_MS,
+    timeout: PROXY_TIMEOUT_MS,
     onProxyReq: (proxyReq, req, res) => {
         if (sessionCookies) {
             proxyReq.setHeader('Cookie', sessionCookies);
@@ -340,6 +362,10 @@ const qwenProxyOptions = {
     target: QWEN_TARGET,
     changeOrigin: true,
     ws: true,
+    xfwd: true,
+    agent: qwenOutboundAgent,
+    proxyTimeout: PROXY_TIMEOUT_MS,
+    timeout: PROXY_TIMEOUT_MS,
     onProxyReq: (proxyReq, req, res) => {
         if (qwenSession && qwenSession.cookies) {
             const cookieStr = qwenSession.cookies.map((c) => c.name + '=' + c.value).join('; ');
