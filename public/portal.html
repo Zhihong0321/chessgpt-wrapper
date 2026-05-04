@@ -555,7 +555,7 @@
                 { name: 'Gemini',      displayName: 'Gemini Ultra [拼车]',      logo: 'gemini.png',      apiKey: 'gemini',      nodeType: 'gemini' },
                 { name: 'Grok',        displayName: 'Grok Pro [拼车]',          logo: 'grok.png',        apiKey: 'grok',        nodeType: 'grok' },
                 { name: 'Claude',      displayName: 'Claude Pro [拼车]',        logo: 'claude.png',      apiKey: 'claude',      nodeType: 'claude' },
-                { name: 'Perplexity',  displayName: 'Perplexity Pro [独享]',    logo: 'perplexity.png',  isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
+                { name: 'Perplexity',  displayName: 'Perplexity Pro [独享]',    logo: 'perplexity.png',  nodeType: 'perplexity', url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
                 { name: 'Qwen',        displayName: 'QWEN [官方免费]',           logo: 'qwen.png',        isDirect: true, url: 'https://chat.qwen.ai/' },
             ];
 
@@ -564,7 +564,7 @@
                 Gemini:     [],
                 Grok:       [],
                 Claude:     [],
-                Perplexity: [{ carID: 'direct', title: 'Perplexity Pro [独享]',  status: 'Idle', badge: 'Direct',   isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
+                Perplexity: [{ carID: 'perplexity', title: 'Perplexity Pro [独享]', status: 'Idle', badge: 'Pro', nodeType: 'perplexity', url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
                 Qwen:       [{ carID: 'direct', title: 'QWEN [官方免费]',         status: 'Idle', badge: 'Official', isDirect: true, url: 'https://chat.qwen.ai/' }],
             };
 
@@ -685,7 +685,7 @@
                     const res = await fetch('/api/connect-session', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ carID, nodeType, planType: isPlus }),
+                        body: JSON.stringify({ carID, nodeType, planType: isPlus, directUrl: url, directToken: token }),
                     });
                     const data = await res.json();
                     console.info('[ChessGPT-Portal] connect-session →', data);

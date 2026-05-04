@@ -164,4 +164,106 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
     }
 }
 
-module.exports = { loginChesspntSession };
+/**
+ * Navigates to a CDK/token redemption site, enters the token, submits, and
+ * returns the final URL after the site processes it.
+ * Used for Perplexity (https://v.tuangouai.com/).
+ */
+async function redeemCdkSession({ url, token, stepTimeoutMs = 60000 }) {
+    if (!url || !token) throw new Error('redeemCdkSession requires url and token');
+
+    const execPath = (() => {
+        const candidates = [
+            process.env.PUPPETEER_EXECUTABLE_PATH,
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+        ].filter(Boolean);
+        for (const p of candidates) {
+            try { if (require('fs').existsSync(p)) return p; } catch (_) {}
+        }
+        try {
+            const p = typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : null;
+            if (p) return p;
+        } catch (_) {}
+        return undefined;
+    })();
+
+    const browser = await runStep('puppeteer.launch', () =>
+        puppeteer.launch({
+            headless: true,
+            executablePath: execPath,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run'],
+        })
+    );
+
+    let page;
+    try {
+        page = await browser.newPage();
+        page.setDefaultTimeout(stepTimeoutMs);
+        page.setDefaultNavigationTimeout(stepTimeoutMs);
+
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: stepTimeoutMs });
+        // Give the SPA time to hydrate
+        await new Promise(r => setTimeout(r, 2500));
+
+        // Find the CDK/token input — try common selector patterns
+        const inputSelectors = [
+            'input[placeholder*="CDK"]',
+            'input[placeholder*="cdk"]',
+            'input[placeholder*="激活码"]',
+            'input[placeholder*="兑换码"]',
+            'input[placeholder*="code"]',
+            'input[placeholder*="Code"]',
+            'input[placeholder*="token"]',
+            'input[placeholder*="Token"]',
+            'input[type="text"]',
+            'input:not([type="hidden"])',
+        ];
+
+        let inputEl = null;
+        for (const sel of inputSelectors) {
+            inputEl = await page.$(sel);
+            if (inputEl) { console.log(`[redeemCdk] found input via "${sel}"`); break; }
+        }
+        if (!inputEl) throw new Error('Could not find a text input on the CDK page');
+
+        await inputEl.click({ clickCount: 3 });
+        await page.keyboard.press('Backspace');
+        await inputEl.type(token, { delay: 15 });
+
+        // Find and click the submit button
+        const btnSelectors = [
+            'button[type="submit"]',
+            'button',
+            'a.btn',
+            '[class*="submit"]',
+            '[class*="confirm"]',
+            '[class*="redeem"]',
+        ];
+        let btnEl = null;
+        for (const sel of btnSelectors) {
+            const els = await page.$$(sel);
+            if (els.length) { btnEl = els[els.length - 1]; console.log(`[redeemCdk] clicking button via "${sel}"`); break; }
+        }
+        if (!btnEl) throw new Error('Could not find a submit button on the CDK page');
+
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: stepTimeoutMs }).catch(() => {}),
+            btnEl.click(),
+        ]);
+
+        // Extra wait for SPA transition
+        await new Promise(r => setTimeout(r, 2000));
+
+        const finalUrl = page.url();
+        console.log(`[redeemCdk] final URL: ${finalUrl}`);
+        return { url: finalUrl };
+
+    } finally {
+        try { await browser.close(); } catch (_) {}
+    }
+}
+
+module.exports = { loginChesspntSession, redeemCdkSession };

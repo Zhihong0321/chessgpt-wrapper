@@ -210,7 +210,7 @@ async function runChesspntPuppeteerLogin(reason) {
     if (!puppeteerWanted) return false;
     healthState.lastPuppeteerAttemptAt = new Date().toISOString();
     healthState.lastPuppeteerAttemptReason = String(reason || '');
-    const { loginChesspntSession } = require('./chesspnt_puppeteer_login');
+    const { loginChesspntSession, redeemCdkSession } = require('./chesspnt_puppeteer_login');
     console.log('[chesspnt-wrapper] ChessPNT Puppeteer login:', reason || 'refresh');
     const { cookieHeader, localStorageObj } = await loginChesspntSession({
         baseUrl: PROXY_TARGET,
@@ -421,11 +421,12 @@ app.get('/api/cards', async (req, res) => {
  *   grok   -> GET /client-api/grok/loginToken        -> path suffix -> grok.chesspnt.com + suffix
  *   gemini -> GET /client-api/gemini/loginToken?...  -> path suffix -> gemini.chesspnt.com + suffix
  *   claude -> GET /client-api/claude/auth?...        -> URL/path    -> via sxClaudeUrl or claudeUrl
- *   plus   -> POST /client-api/openai/auth -> POST /auth/login -> /list/#/home
+ *   plus        -> POST /client-api/openai/auth -> POST /auth/login -> /list/#/home
+ *   perplexity  -> Puppeteer navigates to directUrl, enters directToken, returns final URL
  */
 app.post('/api/connect-session', express.json(), async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    const { carID, nodeType, planType } = req.body || {};
+    const { carID, nodeType, planType, directUrl, directToken } = req.body || {};
     if (!carID || !nodeType) {
         return res.status(400).json({ ok: false, error: 'Missing carID or nodeType.' });
     }
@@ -437,7 +438,7 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
             return { userToken: u && u.token ? u.token : sessionLocalStorage.accessToken, username: u && u.username ? u.username : '' };
         } catch (_) { return { userToken: sessionLocalStorage.accessToken, username: '' }; }
     })();
-    if (!userToken) return res.status(503).json({ ok: false, error: 'No session token yet.' });
+    if (!userToken && nodeType !== 'perplexity') return res.status(503).json({ ok: false, error: 'No session token yet.' });
 
     const siteConfig = (() => {
         try { return JSON.parse(sessionLocalStorage.site || '{}'); } catch (_) { return {}; }
@@ -523,6 +524,15 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
                 sessionUrl = data.startsWith('http') ? data : claudeBase + data;
             }
 
+
+        } else if (nodeType === 'perplexity') {
+            const cdkUrl   = directUrl   || 'https://v.tuangouai.com/#/';
+            const cdkToken = directToken || '';
+            if (!cdkToken) return res.status(400).json({ ok: false, error: 'Missing token for perplexity.' });
+            console.log(`[chesspnt-wrapper] perplexity: launching puppeteer → ${cdkUrl}`);
+            const { redeemCdkSession } = require('./chesspnt_puppeteer_login');
+            const result = await redeemCdkSession({ url: cdkUrl, token: cdkToken });
+            sessionUrl = result.url;
 
         } else {
             // plus / claudeSaas / embedded
