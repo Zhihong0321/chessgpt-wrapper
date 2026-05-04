@@ -224,6 +224,10 @@ try {
     console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', formatErrorLogLine('[qwen session] ', e));
 }
 
+function puppeteerLoginInFlightFlag() {
+    return Boolean(puppeteerLoginInFlight);
+}
+
 app.get('/health', (req, res) => {
     const at = sessionLocalStorage && sessionLocalStorage.accessToken;
     res.json({
@@ -231,6 +235,7 @@ app.get('/health', (req, res) => {
         proxyTarget: PROXY_TARGET,
         dataDir: DATA_DIR,
         puppeteerWanted,
+        puppeteerLoginInFlight: puppeteerLoginInFlightFlag(),
         cookieHeaderLength: sessionCookies ? sessionCookies.length : 0,
         hasAccessToken: typeof at === 'string' && at.length > 20,
         lastPuppeteerAttemptAt: healthState.lastPuppeteerAttemptAt,
@@ -242,6 +247,20 @@ app.get('/health', (req, res) => {
     });
 });
 
+/** Portal polls this so it does not scrape the iframe before deferred Puppeteer login finishes. */
+app.get('/api/chesspnt-client-session', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        puppeteerWanted,
+        puppeteerLoginInFlight: puppeteerLoginInFlightFlag(),
+        lastPuppeteerOkAt: healthState.lastPuppeteerOkAt,
+        lastPuppeteerAttemptAt: healthState.lastPuppeteerAttemptAt,
+        puppeteerLastFailure: healthState.puppeteerLastFailure,
+        localStorage: sessionLocalStorage,
+        cookieHeader: sessionCookies,
+    });
+});
+
 app.get('/', (req, res) => {
     try {
         let html = fs.readFileSync(path.join(__dirname, 'public', 'portal.html'), 'utf8');
@@ -249,6 +268,7 @@ app.get('/', (req, res) => {
             <script>
                 window.INJECTED_LS = ${JSON.stringify(sessionLocalStorage)};
                 window.INJECTED_COOKIES = ${JSON.stringify(sessionCookies)};
+                window.WRAPPER_WAIT_FOR_PUPPETEER = ${JSON.stringify(puppeteerWanted)};
             </script>
         `;
         html = html.replace('</head>', injection + '</head>');

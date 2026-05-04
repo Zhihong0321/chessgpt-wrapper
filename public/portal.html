@@ -63,12 +63,46 @@
     </div>
     <iframe id="dashboard-frame" style="display:none;"></iframe>
     <script>
-        // Data injected by server
-        const lsData = window.INJECTED_LS || {};
-        for (const key in lsData) { localStorage.setItem(key, lsData[key]); }
-        const cookiesStr = window.INJECTED_COOKIES || "";
-        const cookies = cookiesStr.split('; ');
-        cookies.forEach(c => { if(c) document.cookie = c + "; path=/; max-age=2592000"; });
+        (async function () {
+        function applyClientSession(ls, cookieHeader) {
+            const obj = ls && typeof ls === 'object' ? ls : {};
+            for (const key in obj) {
+                try { localStorage.setItem(key, obj[key]); } catch (e) { console.warn('localStorage set', key, e); }
+            }
+            const ch = typeof cookieHeader === 'string' ? cookieHeader : '';
+            ch.split('; ').forEach(function (c) { if (c) document.cookie = c + '; path=/; max-age=2592000'; });
+        }
+        function setPortalLoadingMessage(line1, line2) {
+            const el = document.querySelector('#mobile-cards .loading-text');
+            if (!el) return;
+            el.innerHTML = line1 + (line2 ? '<br><span style="font-size:13px;color:#64748b;margin-top:5px;display:block">' + line2 + '</span>' : '');
+        }
+        async function waitForDeferredPuppeteerLogin() {
+            if (!window.WRAPPER_WAIT_FOR_PUPPETEER) {
+                applyClientSession(window.INJECTED_LS || {}, window.INJECTED_COOKIES || '');
+                return;
+            }
+            setPortalLoadingMessage('ChessPNT login in progress…', 'The server is signing in with Puppeteer (often 30–90s on a cold start). This page will continue automatically—no refresh needed.');
+            const deadline = Date.now() + 120000;
+            while (Date.now() < deadline) {
+                const s = await fetch('/api/chesspnt-client-session', { cache: 'no-store' }).then(function (r) { return r.json(); });
+                if (s.lastPuppeteerOkAt) {
+                    applyClientSession(s.localStorage || {}, s.cookieHeader || '');
+                    return;
+                }
+                if (s.puppeteerLastFailure && !s.puppeteerLoginInFlight) {
+                    applyClientSession(s.localStorage || {}, s.cookieHeader || '');
+                    setPortalLoadingMessage('ChessPNT login did not complete.', 'See GET /health or Server diagnostics below. Continuing with the last server session.');
+                    return;
+                }
+                await new Promise(function (r) { setTimeout(r, 1500); });
+            }
+            const s = await fetch('/api/chesspnt-client-session', { cache: 'no-store' }).then(function (r) { return r.json(); });
+            applyClientSession(s.localStorage || {}, s.cookieHeader || '');
+            setPortalLoadingMessage('Still waiting on ChessPNT session.', 'If cards stay empty, reload once or check GET /health.');
+        }
+
+        await waitForDeferredPuppeteerLogin();
 
         const cardsContainer = document.getElementById('mobile-cards');
         const iframe = document.getElementById('dashboard-frame');
@@ -225,7 +259,7 @@
                         ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
                         If you only see Perplexity and Qwen, the ChessPNT session failed — set
                         <code>CHESSPNT_USE_PUPPETEER=1</code> with <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code> (or <code>CHESSGPT_*</code> aliases), or refresh cookies on the volume.
-                        When something breaks, this app records the <strong>real</strong> exception (message, <code>code</code>, <code>errno</code>, <code>stack</code>, <code>causeChain</code>) on <code>GET /health</code> and in Railway logs. If Puppeteer or the proxy failed, an expandable <strong>Server diagnostics</strong> section appears at the bottom of this page.
+                        When Puppeteer is enabled, this page <strong>waits</strong> for server-side login before loading the ChessPNT iframe (so you are not racing a 30–90s login). When something breaks, see <code>GET /health</code> and the <strong>Server diagnostics</strong> section below for full errors (<code>stack</code>, <code>causeChain</code>, etc.).
                     </div>`;
             }
             categories.forEach(cat => {
@@ -265,6 +299,7 @@
             cardsContainer.innerHTML = html;
         }
         renderUI();
+        })();
     </script>
     <details id="diag-wrap" style="display:none;max-width:960px;margin:20px auto;padding:0 16px 40px;box-sizing:border-box;color:#94a3b8;font-size:12px;">
         <summary style="cursor:pointer;color:#cbd5e1;font-weight:600;">Server diagnostics (same data as GET /health)</summary>
