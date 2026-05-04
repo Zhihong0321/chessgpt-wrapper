@@ -264,27 +264,29 @@ function puppeteerLoginInFlightFlag() {
 }
 
 app.get('/health', (req, res) => {
-    const at = sessionLocalStorage && sessionLocalStorage.accessToken;
-    res.json({
-        ok: true,
-        proxyTarget: PROXY_TARGET,
-        proxyTimeoutMs: PROXY_TIMEOUT_MS,
-        dataDir: DATA_DIR,
-        puppeteerWanted,
-        puppeteerLoginInFlight: puppeteerLoginInFlightFlag(),
-        cookieHeaderLength: sessionCookies ? sessionCookies.length : 0,
-        hasAccessToken: typeof at === 'string' && at.length > 20,
-        lastPuppeteerAttemptAt: healthState.lastPuppeteerAttemptAt,
-        lastPuppeteerAttemptReason: healthState.lastPuppeteerAttemptReason,
-        lastPuppeteerOkAt: healthState.lastPuppeteerOkAt,
-        puppeteerLastFailure: healthState.puppeteerLastFailure,
-        proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
-        proxyQwenLastFailure: healthState.proxyQwenLastFailure,
-        proxyDeepseekLastFailure: healthState.proxyDeepseekLastFailure,
-        deepseekUseProxy: USE_DEEPSEEK_PROXY,
-        dnsIpv4First: dnsIpv4FirstApplied,
-        probeChesspntOutbound: '/api/probe-chesspnt-outbound',
-    });
+    try {
+        const at = sessionLocalStorage && sessionLocalStorage.accessToken;
+        res.json({
+            ok: true,
+            proxyTarget: PROXY_TARGET,
+            proxyTimeoutMs: PROXY_TIMEOUT_MS,
+            dataDir: DATA_DIR,
+            puppeteerWanted,
+            puppeteerLoginInFlight: puppeteerLoginInFlightFlag(),
+            cookieHeaderLength: sessionCookies ? sessionCookies.length : 0,
+            hasAccessToken: typeof at === 'string' && at.length > 20,
+            lastPuppeteerAttemptAt: healthState.lastPuppeteerAttemptAt,
+            lastPuppeteerAttemptReason: healthState.lastPuppeteerAttemptReason,
+            lastPuppeteerOkAt: healthState.lastPuppeteerOkAt,
+            puppeteerLastFailure: healthState.puppeteerLastFailure,
+            proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
+            proxyQwenLastFailure: healthState.proxyQwenLastFailure,
+            dnsIpv4First: dnsIpv4FirstApplied,
+            probeChesspntOutbound: '/api/probe-chesspnt-outbound',
+        });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: 'health serialization failed', detail: String(e.message) });
+    }
 });
 
 /**
@@ -480,9 +482,12 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
         if (nodeType === 'sass') {
             const r = await apiGet('/sass/logintoken');
             const suffix = extractData(r) || r.text.trim();
+            console.log(`[chesspnt-wrapper] sass logintoken raw => status=${r.status} text=${r.text.slice(0, 300)}`);
             if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
                 const base = (siteConfig.soruxGptSideBarUrl || 'https://gpt.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            } else {
+                console.warn(`[chesspnt-wrapper] sass logintoken did not return a URL path — session likely expired. suffix="${suffix}"`);
             }
 
         } else if (nodeType === 'grok') {
