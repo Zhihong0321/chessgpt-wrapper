@@ -10,9 +10,11 @@ COPY . .
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Create storage dir and ensure permissions
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create storage dir; ownership fixed at runtime by entrypoint (Railway mounts override build-time chown)
 RUN mkdir -p /storage && chown -R pptruser:pptruser /storage /app
 
-USER pptruser
-
-CMD ["npm", "start"]
+# Stay root so entrypoint can fix volume ownership, then drops to pptruser
+ENTRYPOINT ["/entrypoint.sh"]
