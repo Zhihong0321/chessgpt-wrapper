@@ -6,9 +6,21 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const dns = require('dns');
 const { serializeError, formatErrorLogLine } = require('./serialize_error');
 
+/** Localhost often "just works" while Railway 502s: cloud DNS may prefer AAAA with broken IPv6 egress; home IPv4 path is fine. */
+let dnsIpv4FirstApplied = false;
+try {
+    dns.setDefaultResultOrder('ipv4first');
+    dnsIpv4FirstApplied = true;
+    console.log('[chesspnt-wrapper] dns.setDefaultResultOrder("ipv4first") applied');
+} catch (e) {
+    console.warn('[chesspnt-wrapper] dns.setDefaultResultOrder not available:', e.message);
+}
+
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 
 /** Railway volume mount (e.g. /storage). Unset = read/write next to server.js. */
@@ -286,7 +298,61 @@ app.get('/health', (req, res) => {
         proxyChesspntLastFailure: healthState.proxyChesspntLastFailure,
         proxyQwenLastFailure: healthState.proxyQwenLastFailure,
         proxyDeepseekLastFailure: healthState.proxyDeepseekLastFailure,
+        dnsIpv4First: dnsIpv4FirstApplied,
+        probeChesspntOutbound: '/api/probe-chesspnt-outbound',
     });
+});
+
+/**
+ * One-shot HTTPS check from this process to PROXY_TARGET (same path as the reverse proxy uses).
+ * If localhost works but Railway fails, open this on Railway: `ok:false` here means datacenter egress cannot reach ChessPNT (not a browser/CORS issue).
+ */
+app.get('/api/probe-chesspnt-outbound', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const t0 = Date.now();
+    let targetUrl;
+    try {
+        targetUrl = new URL(PROXY_TARGET.endsWith('/') ? PROXY_TARGET : `${PROXY_TARGET}/`);
+    } catch (e) {
+        return res.status(500).json({ ok: false, error: serializeError(e) });
+    }
+    const lib = targetUrl.protocol === 'https:' ? https : http;
+    const opts = {
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+        path: '/',
+        method: 'GET',
+        agent: chesspntOutboundAgent,
+        headers: {
+            Host: targetUrl.hostname,
+            'User-Agent': 'Mozilla/5.0 (compatible; chesspnt-wrapper/1.0; outbound-probe)',
+            Accept: 'text/html,*/*',
+        },
+    };
+    const preq = lib.request(opts, (pres) => {
+        pres.resume();
+        res.json({
+            ok: true,
+            proxyTarget: PROXY_TARGET,
+            statusCode: pres.statusCode,
+            ms: Date.now() - t0,
+            note: 'Reachability only. Upstream may return 302/401 and still prove the TCP/TLS path works.',
+        });
+    });
+    preq.setTimeout(25000, () => {
+        preq.destroy(new Error('probe socket timeout after 25s'));
+    });
+    preq.on('error', (err) => {
+        if (res.headersSent) return;
+        res.status(502).json({
+            ok: false,
+            proxyTarget: PROXY_TARGET,
+            ms: Date.now() - t0,
+            error: serializeError(err),
+            hint: 'Fails only on Railway vs OK on laptop: datacenter IP / region / IPv6 route. Try another Railway region or confirm ChessPNT allows this egress.',
+        });
+    });
+    preq.end();
 });
 
 /** Portal polls this so it does not scrape the iframe before deferred Puppeteer login finishes. */
