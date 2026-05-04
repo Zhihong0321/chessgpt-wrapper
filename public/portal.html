@@ -5,153 +5,250 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ETERNALGY AI Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap" rel="stylesheet">
     <style>
+        @property --led-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+
         :root {
-            --bg: #f5f7fb;
-            --surface: #ffffff;
-            --surface-muted: #f8fafc;
-            --line: #e2e8f0;
-            --line-strong: #cbd5e1;
-            --text: #0f172a;
-            --text-muted: #64748b;
-            --accent: #1d4ed8;
-            --accent-soft: #dbeafe;
-            --success: #16a34a;
-            --danger: #dc2626;
+            --bg: #07090f;
+            --surface: #0c1018;
+            --surface-hover: #10161f;
+            --line: rgba(255, 255, 255, 0.06);
+            --line-strong: rgba(255, 255, 255, 0.11);
+            --text: #eef2f8;
+            --text-muted: #3d4a5c;
+            --text-soft: #7a8a9e;
+            --accent: #3b82f6;
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
             min-height: 100vh;
-            padding: 24px 16px 40px;
-            background:
-                radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.15), transparent 40%),
-                radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.1), transparent 45%),
-                var(--bg);
+            background: var(--bg);
             color: var(--text);
-            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 300;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .mobile-header {
-            max-width: 1080px;
-            margin: 0 auto 18px;
-            text-align: center;
+        /* ── Header ──────────────────────────────────────────── */
+        .portal-header {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 52px 28px 40px;
+            border-bottom: 1px solid var(--line);
         }
 
-        .mobile-header h1 {
-            margin: 0;
-            font-size: clamp(28px, 5vw, 40px);
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            color: var(--text);
-        }
-
-        .mobile-header p {
-            margin: 10px 0 0;
+        .header-eyebrow {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.28em;
             color: var(--text-muted);
-            font-size: 15px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
         }
 
-        .mobile-header .sub-note {
-            margin-top: 6px;
-            font-size: 14px;
-            letter-spacing: 0.01em;
+        .header-title {
+            font-size: clamp(34px, 5.5vw, 58px);
+            font-weight: 200;
+            letter-spacing: -0.025em;
+            line-height: 1.05;
+            color: var(--text);
         }
 
-        .front-quick-links {
-            max-width: 1080px;
-            margin: 0 auto 24px;
+        .header-title em {
+            font-style: normal;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4, #a855f7, #3b82f6);
+            background-size: 300% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-flow 6s linear infinite;
+        }
+
+        @keyframes gradient-flow {
+            from { background-position: 0% center; }
+            to   { background-position: 300% center; }
+        }
+
+        .header-badges {
+            margin-top: 24px;
             display: flex;
-            justify-content: center;
-            gap: 12px;
+            gap: 20px;
             flex-wrap: wrap;
         }
 
-        .front-quick-links a {
+        .hbadge {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            padding: 10px 18px;
-            border-radius: 999px;
-            border: 1px solid var(--line-strong);
-            background: var(--surface);
-            color: var(--text);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            transition: 0.2s ease;
+            gap: 7px;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            color: var(--text-soft);
+            text-transform: uppercase;
         }
 
-        .front-quick-links a:hover {
-            border-color: #94a3b8;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-            transform: translateY(-1px);
+        .hbadge-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 7px #22c55e;
+            flex-shrink: 0;
         }
 
+        .hbadge-dot--amber {
+            background: #f59e0b;
+            box-shadow: 0 0 7px #f59e0b;
+        }
+
+        /* ── Main container ──────────────────────────────────── */
         .card-container {
-            max-width: 1080px;
+            max-width: 1100px;
             margin: 0 auto;
+            padding: 44px 28px 72px;
+            display: flex;
+            flex-direction: column;
+            gap: 44px;
+        }
+
+        /* ── Category section ────────────────────────────────── */
+        .category-section {
             display: flex;
             flex-direction: column;
             gap: 18px;
         }
 
-        .category-section {
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
-        }
-
         .category-header {
-            margin: 0 0 14px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--line);
             display: flex;
             align-items: center;
             gap: 10px;
-            font-size: 20px;
-            font-weight: 650;
-            color: var(--text);
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--line);
+            margin: 0;
+            font-size: inherit;
+            font-weight: inherit;
         }
 
         .category-header img {
-            width: 24px;
-            height: 24px;
+            width: 30px;
+            height: 30px;
             object-fit: contain;
-            border-radius: 6px;
-            background: var(--surface-muted);
-            padding: 2px;
+            opacity: 0.9;
+            flex-shrink: 0;
         }
 
+        .cat-label {
+            font-size: 17px;
+            font-weight: 300;
+            letter-spacing: 0.04em;
+            color: var(--text);
+        }
+
+        .cat-count {
+            margin-left: auto;
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--text-muted);
+            letter-spacing: 0.06em;
+        }
+
+        /* ── Cards grid ──────────────────────────────────────── */
         .category-cards {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 14px;
         }
 
+        /* ── LED Card ────────────────────────────────────────── */
         .mobile-card {
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            padding: 14px;
+            position: relative;
+            border-radius: 16px;
+            padding: 22px 20px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            transition: 0.2s ease;
+            gap: 18px;
+            transition: transform 0.2s ease;
+            --led-color: #3b82f6;
+        }
+
+        /* LED sweep border */
+        .mobile-card::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 17px;
+            background: conic-gradient(
+                from var(--led-angle),
+                transparent 0deg,
+                transparent 65deg,
+                var(--led-color) 80deg,
+                rgba(255, 255, 255, 0.85) 88deg,
+                var(--led-color) 96deg,
+                transparent 112deg,
+                transparent 360deg
+            );
+            animation: led-spin 6s linear infinite;
+            z-index: 0;
+        }
+
+        /* Card background mask */
+        .mobile-card::after {
+            content: '';
+            position: absolute;
+            inset: 1px;
+            border-radius: 15px;
+            background: var(--surface);
+            z-index: 1;
+            transition: background 0.2s ease;
+        }
+
+        /* All direct children float above the pseudo-element mask */
+        .mobile-card > * {
+            position: relative;
+            z-index: 2;
         }
 
         .mobile-card:hover {
-            border-color: var(--line-strong);
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
         }
 
+        .mobile-card:hover::after {
+            background: var(--surface-hover);
+        }
+
+        @keyframes led-spin {
+            from { --led-angle: 0deg; }
+            to   { --led-angle: 360deg; }
+        }
+
+        /* Per-category LED colors */
+        .mobile-card[data-category="ChatGPT"]    { --led-color: #10b981; }
+        .mobile-card[data-category="Gemini"]     { --led-color: #8b5cf6; }
+        .mobile-card[data-category="Grok"]       { --led-color: #f59e0b; }
+        .mobile-card[data-category="Claude"]     { --led-color: #f97316; }
+        .mobile-card[data-category="Perplexity"] { --led-color: #06b6d4; }
+        .mobile-card[data-category="Qwen"]       { --led-color: #a855f7; }
+
+        /* Vary animation speeds for variety */
+        .mobile-card[data-category="Gemini"]::before     { animation-duration: 8s; }
+        .mobile-card[data-category="Claude"]::before     { animation-duration: 7s; }
+        .mobile-card[data-category="Perplexity"]::before { animation-duration: 4.8s; }
+        .mobile-card[data-category="Qwen"]::before       { animation-duration: 7.6s; }
+
+        /* ── Card internals ──────────────────────────────────── */
         .card-header {
             display: flex;
             justify-content: space-between;
@@ -160,144 +257,139 @@
         }
 
         .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            line-height: 1.35;
+            font-size: 13px;
+            font-weight: 400;
             color: var(--text);
+            line-height: 1.45;
+            letter-spacing: 0.01em;
         }
 
         .card-badge {
-            border-radius: 999px;
-            padding: 4px 10px;
-            font-size: 11px;
-            letter-spacing: 0.03em;
-            font-weight: 700;
-            color: #1e40af;
-            background: var(--accent-soft);
-            border: 1px solid #bfdbfe;
-            white-space: nowrap;
+            flex-shrink: 0;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+            padding: 3px 7px;
         }
 
         .card-status {
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
             color: var(--text-muted);
-            font-size: 13px;
-            font-weight: 500;
         }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             flex-shrink: 0;
         }
 
         .status-idle .status-dot {
-            background: var(--success);
-            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+            background: #22c55e;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15), 0 0 10px rgba(34, 197, 94, 0.45);
+            animation: pulse-green 4.4s ease infinite;
         }
 
         .status-busy .status-dot {
-            background: var(--danger);
-            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+            background: #ef4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15), 0 0 10px rgba(239, 68, 68, 0.4);
+        }
+
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(34,197,94,0.12), 0 0 7px rgba(34,197,94,0.3); }
+            50%       { box-shadow: 0 0 0 4px rgba(34,197,94,0.06), 0 0 14px rgba(34,197,94,0.55); }
         }
 
         .card-btn {
             width: 100%;
-            border: 1px solid #1e3a8a;
-            border-radius: 10px;
-            background: linear-gradient(180deg, #2563eb, #1d4ed8);
-            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #c8d6e8;
             padding: 10px 12px;
-            font-size: 14px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
             cursor: pointer;
-            transition: 0.2s ease;
+            transition: all 0.2s ease;
+            font-family: inherit;
         }
 
         .card-btn:hover {
-            filter: brightness(1.02);
-            box-shadow: 0 8px 20px rgba(29, 78, 216, 0.25);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.35);
+            color: #fff;
         }
 
         .card-btn:active {
             transform: translateY(1px);
         }
 
+        /* ── Loading state ───────────────────────────────────── */
         .loading-container {
-            text-align: center;
-            padding: 56px 20px;
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            background: var(--surface);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
-            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+            gap: 18px;
+            padding: 88px 24px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
         }
 
         .spinner {
-            width: 34px;
-            height: 34px;
-            border: 3px solid #dbeafe;
+            width: 22px;
+            height: 22px;
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
             border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 1.8s linear infinite;
         }
 
         @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+            to { transform: rotate(360deg); }
         }
 
         .loading-text {
+            font-size: 12px;
+            font-weight: 300;
             color: var(--text-muted);
-            font-size: 15px;
-            line-height: 1.45;
+            letter-spacing: 0.06em;
+            text-align: center;
+            line-height: 1.7;
         }
 
+        /* ── Warning banner ──────────────────────────────────── */
         .session-warning {
-            margin: 0 0 16px;
-            border: 1px solid #fecaca;
-            background: #fff7f7;
-            color: #9f1239;
-            border-radius: 12px;
-            padding: 12px 14px;
-            font-size: 13px;
-            line-height: 1.45;
+            border: 1px solid rgba(239, 68, 68, 0.18);
+            background: rgba(239, 68, 68, 0.04);
+            color: #f87171;
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-size: 12px;
+            font-weight: 300;
+            letter-spacing: 0.02em;
+            line-height: 1.65;
         }
 
-        .session-warning strong {
-            color: #7f1d1d;
-        }
+        .session-warning strong { color: #fca5a5; font-weight: 500; }
 
-        @media (max-width: 520px) {
-            body {
-                padding: 18px 12px 28px;
-            }
-
-            .category-section {
-                padding: 14px;
-            }
-
-            .card-badge {
-                font-size: 10px;
-            }
-        }
-
-        /* Modal Styles */
+        /* ── Modal ───────────────────────────────────────────── */
         .modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -313,14 +405,14 @@
         }
 
         .modal-content {
-            background: var(--surface);
-            border: 1px solid var(--line);
+            background: #0f1520;
+            border: 1px solid var(--line-strong);
             border-radius: 20px;
-            padding: 24px;
+            padding: 28px;
             width: 90%;
             max-width: 480px;
-            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
-            transform: translateY(10px);
+            box-shadow: 0 48px 96px rgba(0, 0, 0, 0.6);
+            transform: translateY(12px);
             transition: 0.2s ease;
         }
 
@@ -329,27 +421,32 @@
         }
 
         .modal-title {
-            margin: 0 0 12px 0;
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: -0.01em;
             color: var(--text);
+            margin-bottom: 10px;
         }
 
         .modal-body {
-            color: var(--text-muted);
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 300;
+            color: var(--text-soft);
             margin-bottom: 20px;
-            line-height: 1.5;
+            line-height: 1.65;
         }
 
         .modal-textarea {
             width: 100%;
             height: 120px;
             border: 1px solid var(--line-strong);
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 12px;
+            background: var(--bg);
+            color: var(--text);
             font-family: inherit;
             font-size: 13px;
+            font-weight: 300;
             resize: vertical;
             margin-bottom: 20px;
         }
@@ -357,62 +454,74 @@
         .modal-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 12px;
+            gap: 10px;
         }
 
         .modal-btn {
-            padding: 10px 18px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
             cursor: pointer;
             transition: 0.2s ease;
-            border: none;
+            border: 1px solid var(--line-strong);
+            font-family: inherit;
         }
 
         .modal-btn-cancel {
-            background: var(--surface-muted);
-            color: var(--text-muted);
-            border: 1px solid var(--line);
+            background: transparent;
+            color: var(--text-soft);
         }
 
         .modal-btn-save {
             background: var(--accent);
             color: #fff;
+            border-color: var(--accent);
         }
 
-        .modal-btn:hover {
-            filter: brightness(1.05);
+        .modal-btn:hover { filter: brightness(1.15); }
+
+        /* ── Responsive ──────────────────────────────────────── */
+        @media (max-width: 620px) {
+            .portal-header  { padding: 36px 18px 28px; }
+            .card-container { padding: 30px 18px 56px; gap: 34px; }
+            .category-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
         }
     </style>
 </head>
 
 <body>
-    <div class="mobile-header">
-        <h1>ETERNALGY AI Portal</h1>
-        <p>[ CHAT MEMORY IS STORED AND SHARED ]</p>
-        <p class="sub-note">[ NO USERNAME / PASSWORD REQUIRED ]</p>
-    </div>
+    <header class="portal-header">
+        <div class="header-eyebrow">Eternalgy · AI Services</div>
+        <h1 class="header-title">Eternalgy<br><em>Intelligence</em></h1>
+        <div class="header-badges">
+            <span class="hbadge"><span class="hbadge-dot"></span>Shared Memory Active</span>
+            <span class="hbadge"><span class="hbadge-dot hbadge-dot--amber"></span>No Login Required</span>
+        </div>
+    </header>
 
     <div id="mobile-cards" class="card-container">
         <div class="loading-container">
             <div class="spinner"></div>
-            <div class="loading-text">Loading sessions…<br><span
-                    style="font-size: 13px; color: #64748b; margin-top: 5px; display: block;">Fetching AI
-                    Instances</span></div>
+            <div class="loading-text">
+                Initializing portal…<br>
+                <span style="font-size:11px;display:block;margin-top:4px;color:var(--text-muted)">Fetching AI instances</span>
+            </div>
         </div>
     </div>
 
     <script>
         (async function () {
 
-
-
             // ─── Helpers ─────────────────────────────────────────────────────────────
             function setLoadingMsg(line1, line2) {
                 const el = document.querySelector('#mobile-cards .loading-text');
                 if (!el) return;
-                el.innerHTML = line1 + (line2 ? '<br><span style="font-size:13px;color:#64748b;margin-top:5px;display:block">' + line2 + '</span>' : '');
+                el.innerHTML = line1 + (line2
+                    ? '<br><span style="font-size:11px;color:var(--text-muted);margin-top:4px;display:block">' + line2 + '</span>'
+                    : '');
             }
             function escapeHtml(s) {
                 return String(s == null ? '' : s)
@@ -442,18 +551,21 @@
 
             // ─── 2. Category config ───────────────────────────────────────────────────
             const CATEGORIES = [
-                { name: 'ChatGPT', displayName: 'ChatGPT PRO [拼车]', logo: 'chatgpt.png', apiKey: 'sass', nodeType: 'sass' },
-                { name: 'Gemini', displayName: 'Gemini Ultra [拼车]', logo: 'gemini.png', apiKey: 'gemini', nodeType: 'gemini' },
-                { name: 'Grok', displayName: 'Grok Pro [拼车]', logo: 'grok.png', apiKey: 'grok', nodeType: 'grok' },
-                { name: 'Claude', displayName: 'Claude Pro [拼车]', logo: 'claude.png', apiKey: 'claude', nodeType: 'claude' },
-                { name: 'Perplexity', displayName: 'Perplexity Pro [独享]', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
-                { name: 'Qwen', displayName: 'QWEN [官方免费]', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' },
+                { name: 'ChatGPT',     displayName: 'ChatGPT PRO [拼车]',      logo: 'chatgpt.png',     apiKey: 'sass',        nodeType: 'sass' },
+                { name: 'Gemini',      displayName: 'Gemini Ultra [拼车]',      logo: 'gemini.png',      apiKey: 'gemini',      nodeType: 'gemini' },
+                { name: 'Grok',        displayName: 'Grok Pro [拼车]',          logo: 'grok.png',        apiKey: 'grok',        nodeType: 'grok' },
+                { name: 'Claude',      displayName: 'Claude Pro [拼车]',        logo: 'claude.png',      apiKey: 'claude',      nodeType: 'claude' },
+                { name: 'Perplexity',  displayName: 'Perplexity Pro [独享]',    logo: 'perplexity.png',  isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
+                { name: 'Qwen',        displayName: 'QWEN [官方免费]',           logo: 'qwen.png',        isDirect: true, url: 'https://chat.qwen.ai/' },
             ];
 
             const allInstances = {
-                ChatGPT: [], Gemini: [], Grok: [], Claude: [],
-                Perplexity: [{ carID: 'direct', title: 'Perplexity Pro [独享]', status: 'Idle', badge: 'Direct', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
-                Qwen: [{ carID: 'direct', title: 'QWEN [官方免费]', status: 'Idle', badge: 'Official', isDirect: true, url: 'https://chat.qwen.ai/' }],
+                ChatGPT:    [],
+                Gemini:     [],
+                Grok:       [],
+                Claude:     [],
+                Perplexity: [{ carID: 'direct', title: 'Perplexity Pro [独享]',  status: 'Idle', badge: 'Direct',   isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
+                Qwen:       [{ carID: 'direct', title: 'QWEN [官方免费]',         status: 'Idle', badge: 'Official', isDirect: true, url: 'https://chat.qwen.ai/' }],
             };
 
             const container = document.getElementById('mobile-cards');
@@ -477,27 +589,32 @@
                     const cards = allInstances[cat.name];
                     if (!cards || !cards.length) return;
                     html += `<div class="category-section">
-                    <h2 class="category-header"><img src="/images/${cat.logo}" alt="${escapeHtml(cat.displayName || cat.name)}"> ${escapeHtml(cat.displayName || cat.name)}</h2>
+                    <h2 class="category-header">
+                        <img src="/images/${cat.logo}" alt="${escapeHtml(cat.name)}">
+                        <span class="cat-label">${escapeHtml(cat.displayName || cat.name)}</span>
+                        <span class="cat-count">${cards.length} instance${cards.length !== 1 ? 's' : ''}</span>
+                    </h2>
                     <div class="category-cards">`;
                     cards.slice(0, 6).forEach(card => {
                         const direct = card.isDirect || false;
                         html += `<div class="mobile-card"
+                            data-category="${escapeHtml(cat.name)}"
                             data-car-id="${escapeHtml(card.carID || '')}"
                             data-node-type="${escapeHtml(card.nodeType || cat.nodeType || '')}"
                             data-is-plus="${card.isPlus || 0}"
                             data-direct="${direct}"
                             data-url="${escapeHtml(card.url || '')}"
                             data-token="${escapeHtml(card.token || '')}">
-                        <div class="card-header">
-                            <div class="card-title">${escapeHtml(card.title)}</div>
-                            <div class="card-badge">${escapeHtml(card.badge)}</div>
-                        </div>
-                        <div class="card-status status-${(card.status || 'idle').toLowerCase()}">
-                            <div class="status-dot"></div>
-                            <span>READY</span>
-                        </div>
-                        <button type="button" class="card-btn">${direct ? 'Open Instance' : 'Connect Session'}</button>
-                    </div>`;
+                            <div class="card-header">
+                                <div class="card-title">${escapeHtml(card.title)}</div>
+                                <div class="card-badge">${escapeHtml(card.badge)}</div>
+                            </div>
+                            <div class="card-status status-${(card.status || 'idle').toLowerCase()}">
+                                <div class="status-dot"></div>
+                                <span>Ready</span>
+                            </div>
+                            <button type="button" class="card-btn">${direct ? 'Open Instance' : 'Connect Session'}</button>
+                        </div>`;
                     });
                     html += `</div></div>`;
                 });
@@ -512,11 +629,10 @@
             try {
                 const data = await fetch('/api/cards', { cache: 'no-store' }).then(r => r.json());
                 if (data.ok) {
-                    if (data.sass && data.sass.length) allInstances.ChatGPT = data.sass;
-                    if (data.gemini && data.gemini.length) allInstances.Gemini = data.gemini;
-                    if (data.grok && data.grok.length) allInstances.Grok = data.grok;
-                    if (data.claude && data.claude.length) allInstances.Claude = data.claude;
-                    // Fallback: use plus cards for ChatGPT if sass is empty
+                    if (data.sass   && data.sass.length)   allInstances.ChatGPT = data.sass;
+                    if (data.gemini && data.gemini.length) allInstances.Gemini  = data.gemini;
+                    if (data.grok   && data.grok.length)   allInstances.Grok    = data.grok;
+                    if (data.claude && data.claude.length) allInstances.Claude  = data.claude;
                     if (!allInstances.ChatGPT.length && data.plus && data.plus.length) {
                         allInstances.ChatGPT = data.plus.map(c => ({ ...c, nodeType: 'plus' }));
                     }
@@ -539,14 +655,14 @@
                 if (isConnecting) { console.info('[ChessGPT-Portal] Busy, please wait.'); return; }
 
                 isConnecting = true;
-                const direct = card.getAttribute('data-direct') === 'true';
-                const url = card.getAttribute('data-url');
-                const token = card.getAttribute('data-token');
-                const carID = card.getAttribute('data-car-id');
+                const direct   = card.getAttribute('data-direct') === 'true';
+                const url      = card.getAttribute('data-url');
+                const token    = card.getAttribute('data-token');
+                const carID    = card.getAttribute('data-car-id');
                 const nodeType = card.getAttribute('data-node-type');
-                const isPlus = parseInt(card.getAttribute('data-is-plus') || '0', 10);
+                const isPlus   = parseInt(card.getAttribute('data-is-plus') || '0', 10);
 
-                // ── Direct-access cards (DeepSeek / Perplexity / Qwen) ────────────────
+                // ── Direct-access cards ───────────────────────────────────────────────
                 if (direct) {
                     if (token) {
                         try { await navigator.clipboard.writeText(token); } catch (_) {
@@ -592,19 +708,19 @@
     </script>
 
     <details id="diag-wrap"
-        style="display:none;max-width:960px;margin:20px auto;padding:0 16px 40px;box-sizing:border-box;color:#94a3b8;font-size:12px;">
-        <summary style="cursor:pointer;color:#cbd5e1;font-weight:600;">Server diagnostics (same data as GET /health)
+        style="display:none;max-width:960px;margin:20px auto;padding:0 28px 48px;box-sizing:border-box;color:var(--text-muted);font-size:11px;">
+        <summary style="cursor:pointer;color:var(--text-soft);font-weight:500;letter-spacing:0.06em;">
+            Server diagnostics (same data as GET /health)
         </summary>
         <pre id="diag-pre"
-            style="white-space:pre-wrap;word-break:break-word;background:#0b1220;padding:14px;border-radius:10px;border:1px solid #334155;margin-top:10px;color:#e2e8f0;font-size:11px;line-height:1.4;"></pre>
+            style="white-space:pre-wrap;word-break:break-word;background:#070b12;padding:16px;border-radius:10px;border:1px solid var(--line-strong);margin-top:12px;color:#cbd5e1;font-size:11px;line-height:1.5;"></pre>
     </details>
-
 
     <script>
         (function () {
             fetch('/health').then(r => r.json()).then(h => {
                 const wrap = document.getElementById('diag-wrap');
-                const pre = document.getElementById('diag-pre');
+                const pre  = document.getElementById('diag-pre');
                 if (!wrap || !pre) return;
                 const show = h.puppeteerLastFailure || h.proxyChesspntLastFailure || h.proxyQwenLastFailure;
                 if (show) {
@@ -612,7 +728,6 @@
                     wrap.style.display = 'block';
                 }
             }).catch(err => console.warn('/health fetch failed', err));
-
         })();
     </script>
 </body>
