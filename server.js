@@ -494,9 +494,12 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
             const isSuper = (planType || 0) >= 3 ? 'true' : 'false';
             const r = await apiGet(`/grok/loginToken?isSuper=${isSuper}`);
             const suffix = extractData(r) || r.text.trim();
+            console.log(`[chesspnt-wrapper] grok loginToken raw => status=${r.status} text=${r.text.slice(0, 300)} suffix="${suffix}"`);
             if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
                 const base = (siteConfig.grokUrl || 'https://grok.chesspnt.com').replace(/\/$/, '');
                 sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            } else {
+                console.warn(`[chesspnt-wrapper] grok loginToken did not return a URL. siteConfig.grokUrl="${siteConfig.grokUrl}"`);
             }
 
         } else if (nodeType === 'gemini') {
