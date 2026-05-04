@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Team AI Portal</title>
+    <style>
+        :root {
+            --bg: #0f111a;
+            --card-bg: #1c1f2e;
+            --accent: #4facfe;
+            --accent-glow: #00f2fe;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        body { background: var(--bg); color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; min-height: 100vh; }
+        .mobile-header { text-align: center; margin-bottom: 30px; padding-top: 10px; }
+        .mobile-header h1 { font-size: 32px; margin: 0; background: linear-gradient(135deg, var(--accent-glow), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; letter-spacing: -0.5px; }
+        .card-container { display: flex; flex-direction: column; gap: 30px; padding-bottom: 40px; max-width: 500px; margin: 0 auto; }
+        .category-section { background: rgba(28, 31, 46, 0.4); border: 1px solid #2a2d3e; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .category-header { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; margin: 0 0 20px 0; color: var(--text); border-bottom: 1px solid #2a2d3e; padding-bottom: 12px; }
+        .category-header img { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
+        .category-cards { display: flex; flex-direction: column; gap: 12px; }
+        .mobile-card { background: var(--card-bg); border: 1px solid #2a2d3e; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: all 0.2s ease; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .card-title { font-size: 18px; font-weight: 700; color: var(--text); }
+        .card-badge { background: rgba(79, 172, 254, 0.15); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-idle .status-dot { background: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
+        .status-busy .status-dot { background: #f87171; box-shadow: 0 0 10px rgba(248, 113, 113, 0.5); }
+        .card-btn { background: linear-gradient(135deg, var(--accent), var(--accent-glow)); color: #fff; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; width: 100%; box-sizing: border-box; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3); }
+        .card-btn:active { opacity: 0.8; }
+        .loading-container { text-align: center; padding: 50px 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: #8a93a6; font-size: 16px; font-weight: 500; line-height: 1.5; }
+        #dashboard-frame { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="mobile-header"><h1>Team Portal</h1></div>
+    <div id="mobile-cards" class="card-container">
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <div class="loading-text">Authenticating & Syncing...<br><span style="font-size: 13px; color: #64748b; margin-top: 5px; display: block;">Fetching AI Instances</span></div>
+        </div>
+    </div>
+    <iframe id="dashboard-frame" style="display:none;"></iframe>
+    <script>
+        // Data injected by server
+        const lsData = window.INJECTED_LS || {};
+        for (const key in lsData) { localStorage.setItem(key, lsData[key]); }
+        const cookiesStr = window.INJECTED_COOKIES || "";
+        const cookies = cookiesStr.split('; ');
+        cookies.forEach(c => { if(c) document.cookie = c + "; path=/; max-age=2592000"; });
+
+        const cardsContainer = document.getElementById('mobile-cards');
+        const iframe = document.getElementById('dashboard-frame');
+        iframe.src = '/list/#/home';
+        
+        const categories = [
+            { name: 'ChatGPT', target: 'Claude+GPT', logo: 'chatgpt.png' },
+            { name: 'Gemini', target: 'Gemini', logo: 'gemini.png' },
+            { name: 'Grok', target: 'Grok', logo: 'grok.png' },
+            { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
+            { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
+            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: '/qwen/' }
+        ];
+        const allInstances = {
+            'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
+            'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
+            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: '/qwen/' }]
+        };
+        let currentCatIndex = 0;
+        let isConnecting = false;
+
+        cardsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('card-btn')) {
+                if (isConnecting) return;
+                isConnecting = true;
+                const btn = e.target;
+                const cardEl = btn.closest('.mobile-card');
+                const targetCat = cardEl.getAttribute('data-target');
+                const title = cardEl.getAttribute('data-title');
+                const isDirect = cardEl.getAttribute('data-direct') === 'true';
+                
+                if (isDirect) {
+                    const url = cardEl.getAttribute('data-url');
+                    const token = cardEl.getAttribute('data-token');
+                    if (token) {
+                        const tempInput = document.createElement('input');
+                        tempInput.value = token;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        btn.textContent = "Token Copied & Opening...";
+                    } else {
+                        btn.textContent = "Opening " + targetCat + "...";
+                    }
+                    setTimeout(() => { 
+                        window.open(url, '_blank'); 
+                        btn.textContent = "Connect Session"; 
+                        isConnecting = false; 
+                    }, 800);
+                    return;
+                }
+                
+                btn.textContent = "Connecting...";
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc) {
+                        const spans = Array.from(doc.querySelectorAll('span, div, a'));
+                        const targetEl = spans.find(s => s.textContent.includes(targetCat));
+                        if (targetEl) targetEl.click();
+                    }
+                } catch(err) { console.warn("Switch failed", err); }
+                
+                let attempts = 0;
+                const poll = setInterval(() => {
+                    attempts++;
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (!doc) return;
+                        const allDivs = Array.from(doc.querySelectorAll('div, h3, span, p'));
+                        const instanceEl = allDivs.find(el => el.textContent.trim() === title);
+                        if (instanceEl) {
+                            clearInterval(poll);
+                            let container = instanceEl.parentElement;
+                            for(let i=0; i<4; i++) {
+                                if(container && (container.textContent.includes('Sass') || container.textContent.includes('Plus') || container.textContent.includes('Pro'))) {
+                                    container.click();
+                                    const link = container.querySelector('a, button');
+                                    if(link) link.click();
+                                    btn.textContent = "Session Opened!";
+                                    setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 3000);
+                                    break;
+                                }
+                                container = container.parentElement;
+                            }
+                        } else if (attempts > 30) { clearInterval(poll); btn.textContent = "Error"; setTimeout(() => { isConnecting = false; }, 2000); }
+                    } catch(err) { console.warn("Poll failed", err); }
+                }, 100);
+            }
+        });
+
+        iframe.onload = () => {
+            setInterval(() => {
+                if (isConnecting) return;
+                const currentCat = categories[currentCatIndex];
+                if (currentCat.isDirect) { currentCatIndex = (currentCatIndex + 1) % categories.length; return; }
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (!doc) return;
+                    const spans = Array.from(doc.querySelectorAll('span, div, a'));
+                    const targetEl = spans.find(s => s.textContent.includes(currentCat.target));
+                    if (targetEl) targetEl.click();
+                } catch(err) {}
+                setTimeout(() => {
+                    if (isConnecting) return;
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (!doc) return;
+                        const allDivs = Array.from(doc.querySelectorAll('div'));
+                        const sassBadges = allDivs.filter(d => d.textContent.trim() === 'Sass' || d.textContent.trim() === 'Plus' || d.textContent.trim() === 'Pro');
+                        const cardsData = [];
+                        sassBadges.forEach(badge => {
+                            let container = badge.parentElement;
+                            for (let i = 0; i < 6; i++) {
+                                if (!container) break;
+                                const text = container.textContent || '';
+                                if (text.includes('Claude Code') || text.includes('大画家')) break;
+                                if ((text.includes('Idle') || text.includes('Busy')) && text.includes('Recommended')) {
+                                    let title = 'Instance';
+                                    const possibleTitles = Array.from(container.querySelectorAll('div, h3, span, p')).filter(el => el.textContent.length >= 3 && el.textContent.length < 25 && el !== badge);
+                                    if (possibleTitles.length > 0) { title = possibleTitles[0].textContent.trim().replace('Sass', '').replace('Plus', '').replace('Pro', '').trim(); }
+                                    if (title.includes('Recommended') || title.includes('Idle')) continue;
+                                    cardsData.push({ id: title, title: title, status: text.includes('Idle') ? 'Idle' : 'Busy', badge: badge.textContent.trim(), target: currentCat.target });
+                                    break;
+                                }
+                                container = container.parentElement;
+                            }
+                        });
+                        if (cardsData.length > 0) {
+                            const uniqueCards = []; const seen = new Set();
+                            for(let c of cardsData) { if(!seen.has(c.id)) { seen.add(c.id); uniqueCards.push(c); } }
+                            allInstances[currentCat.name] = uniqueCards.slice(0, 5);
+                        }
+                        currentCatIndex = (currentCatIndex + 1) % categories.length;
+                        renderUI();
+                    } catch (e) {}
+                }, 800);
+            }, 2500);
+        };
+
+        let lastRenderedJson = '';
+        function renderUI() {
+            if (allInstances['ChatGPT'].length === 0 && allInstances['Gemini'].length === 0 && allInstances['Grok'].length === 0 && allInstances['Claude'].length === 0 && allInstances['Qwen'].length === 0 && allInstances['Perplexity'].length === 0) return;
+            const stateJson = JSON.stringify(allInstances);
+            if (stateJson === lastRenderedJson) return;
+            lastRenderedJson = stateJson;
+            let html = '';
+            categories.forEach(cat => {
+                const cards = allInstances[cat.name];
+                if (cards && cards.length > 0) {
+                    html += `
+                        <div class="category-section">
+                            <h2 class="category-header">
+                                <img src="/images/${cat.logo}" alt="logo">
+                                ${cat.name}
+                            </h2>
+                            <div class="category-cards">
+                    `;
+                    cards.forEach(card => {
+                        html += `
+                            <div class="mobile-card" 
+                                 data-title="${card.title}" 
+                                 data-target="${card.target}"
+                                 data-direct="${card.isDirect || false}"
+                                 data-url="${card.url || ''}"
+                                 data-token="${card.token || ''}">
+                                <div class="card-header">
+                                    <div class="card-title">${card.title}</div>
+                                    <div class="card-badge">${card.badge}</div>
+                                </div>
+                                <div class="card-status status-${card.status.toLowerCase()}">
+                                    <div class="status-dot"></div>
+                                    <span>${card.status} - ${card.isDirect ? 'Direct Access' : 'Recommended'}</span>
+                                </div>
+                                <button class="card-btn">${card.isDirect ? 'Open Instance' : 'Connect Session'}</button>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+            });
+            cardsContainer.innerHTML = html;
+        }
+        renderUI();
+    </script>
+</body>
+</html>

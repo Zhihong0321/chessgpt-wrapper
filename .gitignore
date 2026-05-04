@@ -1,0 +1,5 @@
+node_modules/
+auth.json
+qwen_session.json
+.env
+.DS_Store

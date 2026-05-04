@@ -1,0 +1,23 @@
+{
+  "name": "chesspnt-wrapper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.16.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "electron": "^41.5.0",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.5",
+    "puppeteer": "^24.42.0",
+    "sharp": "^0.34.5"
+  }
+}
