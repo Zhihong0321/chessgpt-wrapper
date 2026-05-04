@@ -1,527 +1,620 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Team AI Portal</title>
+    <title>ETERNALGY AI Portal</title>
     <style>
         :root {
-            --bg: #0f111a;
-            --card-bg: #1c1f2e;
-            --accent: #4facfe;
-            --accent-glow: #00f2fe;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --surface-muted: #f8fafc;
+            --line: #e2e8f0;
+            --line-strong: #cbd5e1;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --accent: #1d4ed8;
+            --accent-soft: #dbeafe;
+            --success: #16a34a;
+            --danger: #dc2626;
         }
-        body { background: var(--bg); color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; min-height: 100vh; }
-        .mobile-header { text-align: center; margin-bottom: 30px; padding-top: 10px; }
-        .mobile-header h1 { font-size: 32px; margin: 0; background: linear-gradient(135deg, var(--accent-glow), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; letter-spacing: -0.5px; }
-        .card-container { display: flex; flex-direction: column; gap: 30px; padding-bottom: 40px; max-width: 500px; margin: 0 auto; }
-        .category-section { background: rgba(28, 31, 46, 0.4); border: 1px solid #2a2d3e; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .category-header { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; margin: 0 0 20px 0; color: var(--text); border-bottom: 1px solid #2a2d3e; padding-bottom: 12px; }
-        .category-header img { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
-        .category-cards { display: flex; flex-direction: column; gap: 12px; }
-        .mobile-card { background: var(--card-bg); border: 1px solid #2a2d3e; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: all 0.2s ease; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; }
-        .card-title { font-size: 18px; font-weight: 700; color: var(--text); }
-        .card-badge { background: rgba(79, 172, 254, 0.15); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-        .card-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .status-idle .status-dot { background: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-        .status-busy .status-dot { background: #f87171; box-shadow: 0 0 10px rgba(248, 113, 113, 0.5); }
-        .card-btn { background: linear-gradient(135deg, var(--accent), var(--accent-glow)); color: #fff; border: none; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; width: 100%; box-sizing: border-box; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3); }
-        .card-btn:active { opacity: 0.8; }
-        .loading-container { text-align: center; padding: 50px 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text { color: #8a93a6; font-size: 16px; font-weight: 500; line-height: 1.5; }
-        #dashboard-frame { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-        .session-warning { max-width: 500px; margin: 0 auto 24px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); color: #fecaca; font-size: 14px; line-height: 1.45; }
-        .session-warning strong { color: #fff; }
-        .front-quick-links { max-width: 500px; margin: -12px auto 22px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 8px; box-sizing: border-box; }
-        .front-quick-links a { display: inline-flex; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; color: #fff; background: linear-gradient(135deg, #4f7cfd 0%, #6366f1 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32); border: 1px solid rgba(255,255,255,0.12); }
-        .front-quick-links a:hover { filter: brightness(1.06); }
-        .front-quick-links a:active { opacity: 0.9; }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 24px 16px 40px;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.15), transparent 40%),
+                radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.1), transparent 45%),
+                var(--bg);
+            color: var(--text);
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .mobile-header {
+            max-width: 1080px;
+            margin: 0 auto 18px;
+            text-align: center;
+        }
+
+        .mobile-header h1 {
+            margin: 0;
+            font-size: clamp(28px, 5vw, 40px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text);
+        }
+
+        .mobile-header p {
+            margin: 10px 0 0;
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        .mobile-header .sub-note {
+            margin-top: 6px;
+            font-size: 14px;
+            letter-spacing: 0.01em;
+        }
+
+        .front-quick-links {
+            max-width: 1080px;
+            margin: 0 auto 24px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .front-quick-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            border-radius: 999px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: 0.2s ease;
+        }
+
+        .front-quick-links a:hover {
+            border-color: #94a3b8;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .card-container {
+            max-width: 1080px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .category-section {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+        }
+
+        .category-header {
+            margin: 0 0 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 650;
+            color: var(--text);
+        }
+
+        .category-header img {
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+            border-radius: 6px;
+            background: var(--surface-muted);
+            padding: 2px;
+        }
+
+        .category-cards {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .mobile-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: 0.2s ease;
+        }
+
+        .mobile-card:hover {
+            border-color: var(--line-strong);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.35;
+            color: var(--text);
+        }
+
+        .card-badge {
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            letter-spacing: 0.03em;
+            font-weight: 700;
+            color: #1e40af;
+            background: var(--accent-soft);
+            border: 1px solid #bfdbfe;
+            white-space: nowrap;
+        }
+
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-idle .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+        }
+
+        .status-busy .status-dot {
+            background: var(--danger);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+        }
+
+        .card-btn {
+            width: 100%;
+            border: 1px solid #1e3a8a;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #2563eb, #1d4ed8);
+            color: #ffffff;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .card-btn:hover {
+            filter: brightness(1.02);
+            box-shadow: 0 8px 20px rgba(29, 78, 216, 0.25);
+        }
+
+        .card-btn:active {
+            transform: translateY(1px);
+        }
+
+        .loading-container {
+            text-align: center;
+            padding: 56px 20px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+        }
+
+        .spinner {
+            width: 34px;
+            height: 34px;
+            border: 3px solid #dbeafe;
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: var(--text-muted);
+            font-size: 15px;
+            line-height: 1.45;
+        }
+
+        .session-warning {
+            margin: 0 0 16px;
+            border: 1px solid #fecaca;
+            background: #fff7f7;
+            color: #9f1239;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .session-warning strong {
+            color: #7f1d1d;
+        }
+
+        @media (max-width: 520px) {
+            body {
+                padding: 18px 12px 28px;
+            }
+
+            .category-section {
+                padding: 14px;
+            }
+
+            .card-badge {
+                font-size: 10px;
+            }
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.2s ease;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 24px;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+            transform: translateY(10px);
+            transition: 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            margin: 0 0 12px 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .modal-body {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .modal-textarea {
+            width: 100%;
+            height: 120px;
+            border: 1px solid var(--line-strong);
+            border-radius: 12px;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+            border: none;
+        }
+
+        .modal-btn-cancel {
+            background: var(--surface-muted);
+            color: var(--text-muted);
+            border: 1px solid var(--line);
+        }
+
+        .modal-btn-save {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .modal-btn:hover {
+            filter: brightness(1.05);
+        }
     </style>
 </head>
+
 <body>
-    <div class="mobile-header"><h1>Team Portal</h1></div>
-    <nav class="front-quick-links" aria-label="Quick links">
-        <a href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">Open DeepSeek</a>
-    </nav>
+    <div class="mobile-header">
+        <h1>ETERNALGY AI Portal</h1>
+        <p>[ CHAT MEMORY IS STORED AND SHARED ]</p>
+        <p class="sub-note">[ NO USERNAME / PASSWORD REQUIRED ]</p>
+    </div>
+
     <div id="mobile-cards" class="card-container">
         <div class="loading-container">
             <div class="spinner"></div>
-            <div class="loading-text">Authenticating & Syncing...<br><span style="font-size: 13px; color: #64748b; margin-top: 5px; display: block;">Fetching AI Instances</span></div>
+            <div class="loading-text">Loading sessions…<br><span
+                    style="font-size: 13px; color: #64748b; margin-top: 5px; display: block;">Fetching AI
+                    Instances</span></div>
         </div>
     </div>
-    <iframe id="dashboard-frame" style="display:none;"></iframe>
+
     <script>
         (async function () {
-        function applyClientSession(ls, cookieHeader) {
-            const obj = ls && typeof ls === 'object' ? ls : {};
-            for (const key in obj) {
-                try { localStorage.setItem(key, obj[key]); } catch (e) { console.warn('localStorage set', key, e); }
-            }
-            const ch = typeof cookieHeader === 'string' ? cookieHeader : '';
-            ch.split('; ').forEach(function (c) { if (c) document.cookie = c + '; path=/; max-age=2592000'; });
-        }
-        function setPortalLoadingMessage(line1, line2) {
-            const el = document.querySelector('#mobile-cards .loading-text');
-            if (!el) return;
-            el.innerHTML = line1 + (line2 ? '<br><span style="font-size:13px;color:#64748b;margin-top:5px;display:block">' + line2 + '</span>' : '');
-        }
-        async function waitForDeferredPuppeteerLogin() {
-            if (!window.WRAPPER_WAIT_FOR_PUPPETEER) {
-                applyClientSession(window.INJECTED_LS || {}, window.INJECTED_COOKIES || '');
-                return;
-            }
-            setPortalLoadingMessage('ChessPNT login in progress…', 'The server is signing in with Puppeteer (often 30–90s on a cold start). This page will continue automatically—no refresh needed.');
-            const deadline = Date.now() + 120000;
-            while (Date.now() < deadline) {
-                const s = await fetch('/api/chesspnt-client-session', { cache: 'no-store' }).then(function (r) { return r.json(); });
-                if (s.lastPuppeteerOkAt) {
-                    applyClientSession(s.localStorage || {}, s.cookieHeader || '');
-                    return;
-                }
-                if (s.puppeteerLastFailure && !s.puppeteerLoginInFlight) {
-                    applyClientSession(s.localStorage || {}, s.cookieHeader || '');
-                    setPortalLoadingMessage('ChessPNT login did not complete.', 'See GET /health or Server diagnostics below. Continuing with the last server session.');
-                    return;
-                }
-                await new Promise(function (r) { setTimeout(r, 1500); });
-            }
-            const s = await fetch('/api/chesspnt-client-session', { cache: 'no-store' }).then(function (r) { return r.json(); });
-            applyClientSession(s.localStorage || {}, s.cookieHeader || '');
-            setPortalLoadingMessage('Still waiting on ChessPNT session.', 'If cards stay empty, reload once or check GET /health.');
-        }
 
-        await waitForDeferredPuppeteerLogin();
 
-        const cardsContainer = document.getElementById('mobile-cards');
-        const iframe = document.getElementById('dashboard-frame');
-        iframe.src = '/list/#/home';
-        
-        const categories = [
-            { name: 'ChatGPT', target: 'Claude+GPT', logo: 'chatgpt.png' },
-            { name: 'Gemini', target: 'Gemini', logo: 'gemini.png' },
-            { name: 'Grok', target: 'Grok', logo: 'grok.png' },
-            { name: 'Claude', target: 'Claude主通道', logo: 'claude.png' },
-            { name: 'DeepSeek', target: 'DeepSeek', logo: 'deepseek.png', isDirect: true, url: 'https://chat.deepseek.com/' },
-            { name: 'Perplexity', target: 'Perplexity', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
-            { name: 'Qwen', target: 'Qwen-AI', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' }
-        ];
-        const allInstances = {
-            'ChatGPT': [], 'Gemini': [], 'Grok': [], 'Claude': [],
-            'DeepSeek': [{ id: 'DeepSeek-Direct', title: 'DeepSeek Chat', status: 'Idle', badge: 'Direct', target: 'DeepSeek', isDirect: true, url: 'https://chat.deepseek.com/' }],
-            'Perplexity': [{ id: 'Perplexity-Pro', title: 'Perplexity Pro', status: 'Idle', badge: 'Pro', target: 'Perplexity', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
-            'Qwen': [{ id: 'Qwen-Direct', title: 'Qwen Max / Turbo', status: 'Idle', badge: 'Team', target: 'Qwen-AI', isDirect: true, url: 'https://chat.qwen.ai/' }]
-        };
-        let currentCatIndex = 0;
-        let isConnecting = false;
 
-        /** Browser console breadcrumbs when automating ChessPNT (Codex / recommended instances) from this page. Filter: ChessGPT-Portal */
-        function portalConnectLog(phase, message, payload) {
-            const line = '[ChessGPT-Portal › Connect] [' + phase + '] ' + message;
-            if (payload !== undefined) console.info(line, payload);
-            else console.info(line);
-        }
+            // ─── Helpers ─────────────────────────────────────────────────────────────
+            function setLoadingMsg(line1, line2) {
+                const el = document.querySelector('#mobile-cards .loading-text');
+                if (!el) return;
+                el.innerHTML = line1 + (line2 ? '<br><span style="font-size:13px;color:#64748b;margin-top:5px;display:block">' + line2 + '</span>' : '');
+            }
+            function escapeHtml(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
 
-        /** Puppeteer on the server only logs into ChessPNT to refresh cookies — it never runs when you press Connect. Prefer a real <a href> when the SPA exposes one. */
-        function extractSessionUrlsFromCard(cardRoot, baseHref) {
-            const absList = [];
-            const seenA = new WeakSet();
-            function pushFromAnchor(a) {
-                if (!a || seenA.has(a)) return;
-                seenA.add(a);
-                const raw = (a.getAttribute('href') || '').trim();
-                if (!raw || raw === '#' || /^javascript:/i.test(raw)) return;
-                try {
-                    absList.push(new URL(raw, baseHref).href);
-                } catch (e) {}
-            }
-            if (cardRoot.querySelectorAll)
-                cardRoot.querySelectorAll('a[href]').forEach(pushFromAnchor);
-            let p = cardRoot;
-            for (let i = 0; i < 6 && p; i++) {
-                if (p.matches && p.matches('a[href]')) pushFromAnchor(p);
-                p = p.parentElement;
-            }
-            return absList;
-        }
-        function pickBestSessionUrl(absList) {
-            if (!absList || !absList.length) return null;
-            const lowered = absList.map(function (u) {
-                return u.toLowerCase();
-            });
-            var i;
-            for (i = 0; i < lowered.length; i++)
-                if (
-                    lowered[i].indexOf('codex') >= 0 ||
-                    lowered[i].indexOf('session') >= 0 ||
-                    lowered[i].indexOf('chat') >= 0 ||
-                    lowered[i].indexOf('/list/') >= 0
-                )
-                    return absList[i];
-            return absList.reduce(function (best, u) {
-                return u.length > best.length ? u : best;
-            });
-        }
-
-        cardsContainer.addEventListener('click', (e) => {
-            let t = e.target;
-            if (t && t.nodeType !== 1) t = t.parentElement;
-            const btn = t && typeof t.closest === 'function' ? t.closest('.card-btn') : null;
-            if (!btn) return;
-            const cardEl = btn.closest('.mobile-card');
-            if (!cardEl) {
-                portalConnectLog('CLICK', 'Ignored: .card-btn is not inside .mobile-card (stale DOM?)');
-                return;
-            }
-            if (isConnecting) {
-                portalConnectLog('CLICK', 'Ignored: previous Connect still running (wait or reload if stuck).');
-                return;
-            }
-            isConnecting = true;
-            const targetCat = cardEl.getAttribute('data-target');
-                const title = cardEl.getAttribute('data-title');
-                const isDirect = cardEl.getAttribute('data-direct') === 'true';
-                
-                if (isDirect) {
-                    const url = cardEl.getAttribute('data-url');
-                    const token = cardEl.getAttribute('data-token');
-                    portalConnectLog('DIRECT_TAB', 'Opening direct link (no ChessPNT iframe automation)', {
-                        portalCategory: targetCat,
-                        url: url,
-                        copiedAccessTokenLen: token ? token.length : 0,
-                    });
-                    if (token) {
-                        const tempInput = document.createElement('input');
-                        tempInput.value = token;
-                        document.body.appendChild(tempInput);
-                        tempInput.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(tempInput);
-                        btn.textContent = "Token Copied & Opening...";
-                    } else {
-                        btn.textContent = "Opening " + targetCat + "...";
+            // ─── 1. Wait for Puppeteer deferred login if applicable ───────────────────
+            async function waitForSession() {
+                const s = await fetch('/api/chesspnt-client-session', { cache: 'no-store' })
+                    .then(r => r.json()).catch(() => ({}));
+                if (!s.puppeteerWanted) return;
+                setLoadingMsg('ChessPNT login in progress…', 'The server is signing in with Puppeteer. This page will continue automatically.');
+                const deadline = Date.now() + 120000;
+                while (Date.now() < deadline) {
+                    const s2 = await fetch('/api/chesspnt-client-session', { cache: 'no-store' })
+                        .then(r => r.json()).catch(() => ({}));
+                    if (s2.lastPuppeteerOkAt) return;
+                    if (s2.puppeteerLastFailure && !s2.puppeteerLoginInFlight) {
+                        setLoadingMsg('Login did not complete.', 'Continuing with last session. Check GET /health for details.');
+                        return;
                     }
-                    setTimeout(() => { 
-                        window.open(url, '_blank'); 
-                        btn.textContent = "Connect Session"; 
-                        isConnecting = false; 
-                    }, 800);
-                    return;
+                    await new Promise(r => setTimeout(r, 2000));
                 }
-                
-                btn.textContent = "Connecting...";
-                let iframeHref = iframe.src || '';
-                try {
-                    iframeHref = iframe.contentWindow.location.href || iframeHref;
-                } catch (eIframeLoc) {}
-                portalConnectLog('START', 'Connect Session clicked — ChessPNT iframe flow (not Puppeteer; server Puppeteer is only for renewing login cookies).', {
-                    expectedCategoryTabSubstring: targetCat,
-                    exactInstanceTitle: title,
-                    iframeInitially: iframeHref,
-                    tip: 'We switch category in the iframe, find the row title, then prefer window.open(<a href>) on the same Railway origin if the card exposes a link; otherwise we fall back to synthetic clicks.',
-                });
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (!doc) {
-                        portalConnectLog('CATEGORY_TAB', 'Cannot access iframe document (blocked or empty). Retry after /list finishes loading.', { targetCat: targetCat });
-                    } else {
-                        const spans = Array.from(doc.querySelectorAll('span, div, a'));
-                        const targetEl = spans.find(s => s.textContent.includes(targetCat));
-                        if (targetEl) {
-                            targetEl.click();
-                            portalConnectLog('CATEGORY_TAB', 'Clicked category tab/control matching substring.', {
-                                targetCat: targetCat,
-                                clickedTag: targetEl.tagName,
-                                snippet: (targetEl.textContent || '').trim().slice(0, 120),
-                            });
-                        } else {
-                            portalConnectLog('CATEGORY_TAB', 'FAILED: no clickable element contained expected category substring. Wrong dashboard state or UI language change?', {
-                                targetCat: targetCat,
-                                sampledSpanCount: spans.length,
-                                hint: 'Open /list/#/home in this host manually and confirm this tab exists (e.g. Claude+GPT, Gemini…).',
-                            });
-                        }
-                    }
-                } catch (err) {
-                    portalConnectLog('CATEGORY_TAB', 'EXCEPTION while switching category.', { message: err.message, targetCat: targetCat });
+            }
+            await waitForSession();
+
+            // ─── 2. Category config ───────────────────────────────────────────────────
+            const CATEGORIES = [
+                { name: 'ChatGPT', displayName: 'ChatGPT PRO [拼车]', logo: 'chatgpt.png', apiKey: 'sass', nodeType: 'sass' },
+                { name: 'Gemini', displayName: 'Gemini Ultra [拼车]', logo: 'gemini.png', apiKey: 'gemini', nodeType: 'gemini' },
+                { name: 'Grok', displayName: 'Grok Pro [拼车]', logo: 'grok.png', apiKey: 'grok', nodeType: 'grok' },
+                { name: 'Claude', displayName: 'Claude Pro [拼车]', logo: 'claude.png', apiKey: 'claude', nodeType: 'claude' },
+                { name: 'Perplexity', displayName: 'Perplexity Pro [独享]', logo: 'perplexity.png', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' },
+                { name: 'Qwen', displayName: 'QWEN [官方免费]', logo: 'qwen.png', isDirect: true, url: 'https://chat.qwen.ai/' },
+            ];
+
+            const allInstances = {
+                ChatGPT: [], Gemini: [], Grok: [], Claude: [],
+                Perplexity: [{ carID: 'direct', title: 'Perplexity Pro [独享]', status: 'Idle', badge: 'Direct', isDirect: true, url: 'https://v.tuangouai.com/#/', token: 'perplexity-30-10-cdk|706323' }],
+                Qwen: [{ carID: 'direct', title: 'QWEN [官方免费]', status: 'Idle', badge: 'Official', isDirect: true, url: 'https://chat.qwen.ai/' }],
+            };
+
+            const container = document.getElementById('mobile-cards');
+            let isConnecting = false;
+
+            // ─── 3. Render ────────────────────────────────────────────────────────────
+            let lastJson = '';
+            function renderUI() {
+                const stateJson = JSON.stringify(allInstances);
+                if (stateJson === lastJson) return;
+                lastJson = stateJson;
+
+                const chessEmpty = ['ChatGPT', 'Gemini', 'Grok', 'Claude'].every(k => !allInstances[k] || !allInstances[k].length);
+                let html = '';
+                if (chessEmpty) {
+                    html += `<div class="session-warning"><strong>ChessPNT sessions not loaded.</strong>
+                    ChatGPT / Gemini / Grok / Claude require a live <code>chat.chesspnt.com</code> session.
+                    Only direct cards are showing. Check <code>GET /health</code> for details.</div>`;
                 }
-                
-                let attempts = 0;
-                const poll = setInterval(() => {
-                    attempts++;
-                    try {
-                        const doc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (!doc) {
-                            if (attempts === 10 || attempts === 20)
-                                portalConnectLog('POLL', 'No iframe document yet (attempt ' + attempts + '/30).');
-                            if (attempts > 30) {
-                                clearInterval(poll);
-                                portalConnectLog('OPEN_FAIL', 'Timeout: iframe document never became readable (cross-origin, crash, or blocked).', {
-                                    categoryTabSubstring: targetCat,
-                                    exactInstanceTitle: title,
-                                    iframeSrcAttr: iframe.src,
-                                });
-                                btn.textContent = "Error";
-                                setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
-                            }
-                            return;
-                        }
-                        const allDivs = Array.from(doc.querySelectorAll('div, h3, span, p'));
-                        const instanceEl = allDivs.find(el => el.textContent.trim() === title);
-                        if (attempts === 1)
-                            portalConnectLog('POLL', 'Watching iframe for row with exact title (case/whitespace-sensitive). Scanning DOM…', {
-                                title: title,
-                                candidateElementsScanned: allDivs.length,
-                            });
-                        if (attempts === 10 || attempts === 20)
-                            portalConnectLog('POLL', 'Still searching for matching row.', { attempts: attempts, exactInstanceTitle: title });
-                        if (instanceEl) {
-                            clearInterval(poll);
-                            let container = instanceEl.parentElement;
-                            let opened = false;
-                            for (let depth = 0; depth < 4; depth++) {
-                                if (container && (container.textContent.includes('Sass') || container.textContent.includes('Plus') || container.textContent.includes('Pro'))) {
-                                    const iframeWin = doc.defaultView || iframe.contentWindow;
-                                    const baseHref = iframeWin.location.href;
-                                    const hrefCandidates = extractSessionUrlsFromCard(container, baseHref);
-                                    const picked = pickBestSessionUrl(hrefCandidates);
-                                    let openedViaUrl = false;
-                                    if (picked) {
-                                        try {
-                                            if (new URL(picked).origin === window.location.origin) {
-                                                window.open(picked, '_blank', 'noopener,noreferrer');
-                                                openedViaUrl = true;
-                                                portalConnectLog('OPEN', 'Opened new tab using link URL from card (same proxy origin — keeps session cookies).', {
-                                                    exactInstanceTitle: title,
-                                                    categoryTab: targetCat,
-                                                    depthFromLabel: depth,
-                                                    url: picked,
-                                                });
-                                            } else {
-                                                portalConnectLog('OPEN', 'Ignored off-origin <a href> (would bypass proxy cookies); using synthetic clicks.', {
-                                                    href: picked,
-                                                    proxyOrigin: window.location.origin,
-                                                });
-                                            }
-                                        } catch (eUrl) {
-                                            portalConnectLog('OPEN', 'Could not parse card link; using synthetic clicks.', { message: eUrl.message });
-                                        }
-                                    } else {
-                                        portalConnectLog('OPEN', 'No usable <a href> on card subtree; using synthetic clicks.', {
-                                            exactInstanceTitle: title,
-                                            usableResolvedUrlsFound: hrefCandidates.length,
-                                        });
-                                    }
-                                    if (!openedViaUrl) {
-                                        container.click();
-                                        const link = container.querySelector('a, button');
-                                        if (link) {
-                                            link.click();
-                                            portalConnectLog('OPEN', 'Fallback: clicked card container + nested control.', {
-                                                exactInstanceTitle: title,
-                                                categoryTab: targetCat,
-                                                depthFromLabel: depth,
-                                                innerTag: link.tagName,
-                                            });
-                                        } else {
-                                            portalConnectLog('OPEN', 'Fallback: clicked card container only (no nested a/button).', {
-                                                exactInstanceTitle: title,
-                                                categoryTab: targetCat,
-                                                depthFromLabel: depth,
-                                            });
-                                        }
-                                    }
-                                    btn.textContent = "Session Opened!";
-                                    setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 3000);
-                                    opened = true;
-                                    break;
-                                }
-                                container = container.parentElement;
-                            }
-                            if (!opened) {
-                                portalConnectLog('OPEN_FAIL', 'Found label text but no Sass/Plus/Pro ancestor within 4 parent levels.', {
-                                    exactInstanceTitle: title,
-                                    suggestion: 'ChessPNT changed card DOM. Inspect iframe element for this row in DevTools.',
-                                });
-                                btn.textContent = "Error";
-                                setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
-                            }
-                        } else if (attempts > 30) {
-                            clearInterval(poll);
-                            portalConnectLog('OPEN_FAIL', 'Timeout after 30×100ms: no element with trim(text)===exact title. ChessPNT not ready, proxy 502 fragment, or title mismatch.', {
-                                exactInstanceTitle: title,
-                                categoryTabSubstring: targetCat,
-                                sampledElements: allDivs.length,
-                                hint: 'Check Network tab on parent page for wrapper 502 JSON. Confirm iframe shows /list dashboard and instance id still matches data-title scraped earlier.',
-                            });
-                            btn.textContent = "Error";
-                            setTimeout(() => { isConnecting = false; btn.textContent = "Connect Session"; }, 2000);
-                        }
-                    } catch (err) {
-                        portalConnectLog('POLL', 'EXCEPTION in poll iteration ' + attempts + '.', { message: err.message });
-                    }
-                }, 100);
-        });
-
-        iframe.onload = () => {
-            let iframeLoc = iframe.src || '';
-            try {
-                iframeLoc = iframe.contentWindow.location.href || iframeLoc;
-            } catch (e0) {}
-            portalConnectLog('IFRAME', 'ChessPNT iframe load/navigation finished', {
-                effectiveUrl: iframeLoc,
-                note: 'If you see recurring loads after Connect, the SPA or session link may be redirecting.',
-            });
-            setInterval(() => {
-                if (isConnecting) return;
-                const currentCat = categories[currentCatIndex];
-                if (currentCat.isDirect) { currentCatIndex = (currentCatIndex + 1) % categories.length; return; }
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (!doc) return;
-                    const spans = Array.from(doc.querySelectorAll('span, div, a'));
-                    const targetEl = spans.find(s => s.textContent.includes(currentCat.target));
-                    if (targetEl) targetEl.click();
-                } catch(err) {}
-                setTimeout(() => {
-                    if (isConnecting) return;
-                    try {
-                        const doc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (!doc) return;
-                        const allDivs = Array.from(doc.querySelectorAll('div'));
-                        const sassBadges = allDivs.filter(d => d.textContent.trim() === 'Sass' || d.textContent.trim() === 'Plus' || d.textContent.trim() === 'Pro');
-                        const cardsData = [];
-                        sassBadges.forEach(badge => {
-                            let container = badge.parentElement;
-                            for (let i = 0; i < 6; i++) {
-                                if (!container) break;
-                                const text = container.textContent || '';
-                                if (text.includes('Claude Code') || text.includes('大画家')) break;
-                                if ((text.includes('Idle') || text.includes('Busy')) && text.includes('Recommended')) {
-                                    let title = 'Instance';
-                                    const possibleTitles = Array.from(container.querySelectorAll('div, h3, span, p')).filter(el => el.textContent.length >= 3 && el.textContent.length < 25 && el !== badge);
-                                    if (possibleTitles.length > 0) { title = possibleTitles[0].textContent.trim().replace('Sass', '').replace('Plus', '').replace('Pro', '').trim(); }
-                                    if (title.includes('Recommended') || title.includes('Idle')) continue;
-                                    cardsData.push({ id: title, title: title, status: text.includes('Idle') ? 'Idle' : 'Busy', badge: badge.textContent.trim(), target: currentCat.target });
-                                    break;
-                                }
-                                container = container.parentElement;
-                            }
-                        });
-                        if (cardsData.length > 0) {
-                            const uniqueCards = []; const seen = new Set();
-                            for(let c of cardsData) { if(!seen.has(c.id)) { seen.add(c.id); uniqueCards.push(c); } }
-                            allInstances[currentCat.name] = uniqueCards.slice(0, 5);
-                        }
-                        currentCatIndex = (currentCatIndex + 1) % categories.length;
-                        renderUI();
-                    } catch (e) {}
-                }, 800);
-            }, 2500);
-        };
-
-        let lastRenderedJson = '';
-        function escapeHtml(str) {
-            return String(str == null ? '' : str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-        function renderUI() {
-            if (allInstances['ChatGPT'].length === 0 && allInstances['Gemini'].length === 0 && allInstances['Grok'].length === 0 && allInstances['Claude'].length === 0 && allInstances['Qwen'].length === 0 && allInstances['DeepSeek'].length === 0 && allInstances['Perplexity'].length === 0) return;
-            const stateJson = JSON.stringify(allInstances);
-            if (stateJson === lastRenderedJson) return;
-            lastRenderedJson = stateJson;
-            let html = '';
-            const chessBackedKeys = ['ChatGPT', 'Gemini', 'Grok', 'Claude'];
-            const chessBackedEmpty = chessBackedKeys.every((k) => !allInstances[k] || allInstances[k].length === 0);
-            if (chessBackedEmpty) {
-                html += `
-                    <div class="session-warning">
-                        <strong>ChessPNT session not loading.</strong>
-                        ChatGPT / Gemini / Grok / Claude cards come from a logged-in <code>chat.chesspnt.com</code> session.
-                        If you only see DeepSeek, Perplexity, and Qwen, the ChessPNT session failed — set
-                        <code>CHESSPNT_USE_PUPPETEER=1</code> with <code>CHESSPNT_USERNAME</code> / <code>CHESSPNT_PASSWORD</code> (or <code>CHESSGPT_*</code> aliases), or refresh cookies on the volume.
-                        When Puppeteer is enabled, this page <strong>waits</strong> for server-side login before loading the ChessPNT iframe (so you are not racing a 30–90s login). When something breaks, see <code>GET /health</code> and the <strong>Server diagnostics</strong> section below for full errors (<code>stack</code>, <code>causeChain</code>, etc.).
-                        If it worked on <strong>localhost</strong> but fails on <strong>Railway</strong>, the wrapper must reach ChessPNT from the datacenter (different IP than your home). Open <code>GET /api/probe-chesspnt-outbound</code> on the same host — <code>ok:true</code> means egress works; <code>ok:false</code> is a network/upstream block, not CORS in the browser.
+                CATEGORIES.forEach(cat => {
+                    const cards = allInstances[cat.name];
+                    if (!cards || !cards.length) return;
+                    html += `<div class="category-section">
+                    <h2 class="category-header"><img src="/images/${cat.logo}" alt="${escapeHtml(cat.displayName || cat.name)}"> ${escapeHtml(cat.displayName || cat.name)}</h2>
+                    <div class="category-cards">`;
+                    cards.slice(0, 6).forEach(card => {
+                        const direct = card.isDirect || false;
+                        html += `<div class="mobile-card"
+                            data-car-id="${escapeHtml(card.carID || '')}"
+                            data-node-type="${escapeHtml(card.nodeType || cat.nodeType || '')}"
+                            data-is-plus="${card.isPlus || 0}"
+                            data-direct="${direct}"
+                            data-url="${escapeHtml(card.url || '')}"
+                            data-token="${escapeHtml(card.token || '')}">
+                        <div class="card-header">
+                            <div class="card-title">${escapeHtml(card.title)}</div>
+                            <div class="card-badge">${escapeHtml(card.badge)}</div>
+                        </div>
+                        <div class="card-status status-${(card.status || 'idle').toLowerCase()}">
+                            <div class="status-dot"></div>
+                            <span>READY</span>
+                        </div>
+                        <button type="button" class="card-btn">${direct ? 'Open Instance' : 'Connect Session'}</button>
                     </div>`;
-            }
-            categories.forEach(cat => {
-                const cards = allInstances[cat.name];
-                if (cards && cards.length > 0) {
-                    html += `
-                        <div class="category-section">
-                            <h2 class="category-header">
-                                <img src="/images/${cat.logo}" alt="logo">
-                                ${cat.name}
-                            </h2>
-                            <div class="category-cards">
-                    `;
-                    cards.forEach(card => {
-                        html += `
-                            <div class="mobile-card" 
-                                 data-title="${escapeHtml(card.title)}" 
-                                 data-target="${escapeHtml(card.target)}"
-                                 data-direct="${card.isDirect || false}"
-                                 data-url="${escapeHtml(card.url || '')}"
-                                 data-token="${escapeHtml(card.token || '')}">
-                                <div class="card-header">
-                                    <div class="card-title">${escapeHtml(card.title)}</div>
-                                    <div class="card-badge">${escapeHtml(card.badge)}</div>
-                                </div>
-                                <div class="card-status status-${card.status.toLowerCase()}">
-                                    <div class="status-dot"></div>
-                                    <span>${card.status} - ${card.isDirect ? 'Direct Access' : 'Recommended'}</span>
-                                </div>
-                                <button type="button" class="card-btn">${card.isDirect ? 'Open Instance' : 'Connect Session'}</button>
-                            </div>
-                        `;
                     });
                     html += `</div></div>`;
+                });
+                container.innerHTML = html;
+            }
+
+            // Show direct cards right away
+            renderUI();
+
+            // ─── 4. Fetch real session cards from server API ──────────────────────────
+            setLoadingMsg('Loading sessions…', 'Fetching AI instances from ChessPNT…');
+            try {
+                const data = await fetch('/api/cards', { cache: 'no-store' }).then(r => r.json());
+                if (data.ok) {
+                    if (data.sass && data.sass.length) allInstances.ChatGPT = data.sass;
+                    if (data.gemini && data.gemini.length) allInstances.Gemini = data.gemini;
+                    if (data.grok && data.grok.length) allInstances.Grok = data.grok;
+                    if (data.claude && data.claude.length) allInstances.Claude = data.claude;
+                    // Fallback: use plus cards for ChatGPT if sass is empty
+                    if (!allInstances.ChatGPT.length && data.plus && data.plus.length) {
+                        allInstances.ChatGPT = data.plus.map(c => ({ ...c, nodeType: 'plus' }));
+                    }
+                } else {
+                    console.warn('[ChessGPT-Portal] /api/cards error:', data.error);
+                }
+            } catch (e) {
+                console.warn('[ChessGPT-Portal] Failed to fetch /api/cards:', e.message);
+            }
+            renderUI();
+
+            // ─── 5. Click handler ─────────────────────────────────────────────────────
+            container.addEventListener('click', async (e) => {
+                let t = e.target;
+                if (t && t.nodeType !== 1) t = t.parentElement;
+                const btn = t && typeof t.closest === 'function' ? t.closest('.card-btn') : null;
+                if (!btn) return;
+                const card = btn.closest('.mobile-card');
+                if (!card) return;
+                if (isConnecting) { console.info('[ChessGPT-Portal] Busy, please wait.'); return; }
+
+                isConnecting = true;
+                const direct = card.getAttribute('data-direct') === 'true';
+                const url = card.getAttribute('data-url');
+                const token = card.getAttribute('data-token');
+                const carID = card.getAttribute('data-car-id');
+                const nodeType = card.getAttribute('data-node-type');
+                const isPlus = parseInt(card.getAttribute('data-is-plus') || '0', 10);
+
+                // ── Direct-access cards (DeepSeek / Perplexity / Qwen) ────────────────
+                if (direct) {
+                    if (token) {
+                        try { await navigator.clipboard.writeText(token); } catch (_) {
+                            const tmp = document.createElement('input');
+                            tmp.value = token; document.body.appendChild(tmp); tmp.select();
+                            document.execCommand('copy'); document.body.removeChild(tmp);
+                        }
+                        btn.textContent = 'Token Copied & Opening…';
+                    } else {
+                        btn.textContent = 'Opening…';
+                    }
+                    setTimeout(() => { window.open(url, '_blank'); btn.textContent = 'Open Instance'; isConnecting = false; }, 600);
+                    return;
+                }
+
+                // ── ChessPNT session via server-side API ──────────────────────────────
+                btn.textContent = 'Connecting…';
+                console.info('[ChessGPT-Portal] Calling /api/connect-session', { carID, nodeType, isPlus });
+                try {
+                    const res = await fetch('/api/connect-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ carID, nodeType, planType: isPlus }),
+                    });
+                    const data = await res.json();
+                    console.info('[ChessGPT-Portal] connect-session →', data);
+                    if (data.ok && data.url) {
+                        btn.textContent = 'Session Opened!';
+                        window.open(data.url, '_blank');
+                    } else {
+                        btn.textContent = 'Error – see console';
+                        console.error('[ChessGPT-Portal] connect-session failed:', data);
+                    }
+                } catch (err) {
+                    btn.textContent = 'Error – see console';
+                    console.error('[ChessGPT-Portal] connect-session exception:', err);
+                } finally {
+                    setTimeout(() => { btn.textContent = 'Connect Session'; isConnecting = false; }, 3000);
                 }
             });
-            cardsContainer.innerHTML = html;
-        }
-        renderUI();
+
         })();
     </script>
-    <details id="diag-wrap" style="display:none;max-width:960px;margin:20px auto;padding:0 16px 40px;box-sizing:border-box;color:#94a3b8;font-size:12px;">
-        <summary style="cursor:pointer;color:#cbd5e1;font-weight:600;">Server diagnostics (same data as GET /health)</summary>
-        <pre id="diag-pre" style="white-space:pre-wrap;word-break:break-word;background:#0b1220;padding:14px;border-radius:10px;border:1px solid #334155;margin-top:10px;color:#e2e8f0;font-size:11px;line-height:1.4;"></pre>
+
+    <details id="diag-wrap"
+        style="display:none;max-width:960px;margin:20px auto;padding:0 16px 40px;box-sizing:border-box;color:#94a3b8;font-size:12px;">
+        <summary style="cursor:pointer;color:#cbd5e1;font-weight:600;">Server diagnostics (same data as GET /health)
+        </summary>
+        <pre id="diag-pre"
+            style="white-space:pre-wrap;word-break:break-word;background:#0b1220;padding:14px;border-radius:10px;border:1px solid #334155;margin-top:10px;color:#e2e8f0;font-size:11px;line-height:1.4;"></pre>
     </details>
+
+
     <script>
         (function () {
-            fetch('/health')
-                .then(function (r) { return r.json(); })
-                .then(function (h) {
-                    var wrap = document.getElementById('diag-wrap');
-                    var pre = document.getElementById('diag-pre');
-                    if (!wrap || !pre) return;
-                    var show = h.puppeteerLastFailure || h.proxyChesspntLastFailure || h.proxyQwenLastFailure || h.proxyDeepseekLastFailure;
-                    if (show) {
-                        pre.textContent = JSON.stringify(
-                            {
-                                puppeteerLastFailure: h.puppeteerLastFailure,
-                                proxyChesspntLastFailure: h.proxyChesspntLastFailure,
-                                proxyQwenLastFailure: h.proxyQwenLastFailure,
-                                proxyDeepseekLastFailure: h.proxyDeepseekLastFailure,
-                            },
-                            null,
-                            2
-                        );
-                        wrap.style.display = 'block';
-                    }
-                })
-                .catch(function (err) {
-                    console.warn('/health fetch failed', err);
-                });
+            fetch('/health').then(r => r.json()).then(h => {
+                const wrap = document.getElementById('diag-wrap');
+                const pre = document.getElementById('diag-pre');
+                if (!wrap || !pre) return;
+                const show = h.puppeteerLastFailure || h.proxyChesspntLastFailure || h.proxyQwenLastFailure;
+                if (show) {
+                    pre.textContent = JSON.stringify({ puppeteerLastFailure: h.puppeteerLastFailure, proxyChesspntLastFailure: h.proxyChesspntLastFailure, proxyQwenLastFailure: h.proxyQwenLastFailure }, null, 2);
+                    wrap.style.display = 'block';
+                }
+            }).catch(err => console.warn('/health fetch failed', err));
+
         })();
     </script>
 </body>
+
 </html>

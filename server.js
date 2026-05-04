@@ -22,6 +22,7 @@ try {
 const app = express();
 app.set('trust proxy', 1);
 app.use(cors());
+app.use(express.json());
 
 /** Railway volume mount (e.g. /storage). Unset = read/write next to server.js. */
 const DATA_DIR = process.env.PERSISTENT_STORAGE_DIR
@@ -39,7 +40,7 @@ if (process.env.PERSISTENT_STORAGE_DIR) {
 function readTextFileIfExists(filePath) {
     try {
         if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8').trim();
-    } catch (_) {}
+    } catch (_) { }
     return null;
 }
 
@@ -75,7 +76,6 @@ function createKeepAliveAgent(useHttps) {
 }
 const chesspntOutboundAgent = createKeepAliveAgent(PROXY_TARGET.startsWith('https'));
 const qwenOutboundAgent = createKeepAliveAgent(true);
-const deepseekOutboundAgent = createKeepAliveAgent(true);
 
 // Fallback when no volume file, env, or Puppeteer (legacy / local dev)
 const defaultLocalStorageData = {
@@ -163,13 +163,6 @@ const PUPPETEER_REFRESH_MS = parseInt(process.env.CHESSPNT_PUPPETEER_REFRESH_MS 
 
 const puppeteerWanted = USE_PUPPETEER_LOGIN && PUPPETEER_USER && PUPPETEER_PASS && !cookiesFromEnv;
 
-/**
- * Chat is behind Cloudflare: clearance cookies tie to the IP that passed the challenge. A session captured
- * on your laptop is invalid when the server exits from Railway → “Max challenge attempts exceeded”.
- * Default: disable reverse proxy; portal opens https://chat.deepseek.com directly (same idea as Qwen).
- * Enable only after refreshing deepseek_session.json from Puppeteer running with THIS host’s egress IP.
- */
-const USE_DEEPSEEK_PROXY = envBool('DEEPSEEK_USE_PROXY') || envBool('CHESSGPT_DEEPSEEK_USE_PROXY');
 
 if (!cookiesFromEnv && !cookiesFromFile && !puppeteerWanted) {
     console.warn(
@@ -204,7 +197,6 @@ const healthState = {
     puppeteerLastFailure: null,
     proxyChesspntLastFailure: null,
     proxyQwenLastFailure: null,
-    proxyDeepseekLastFailure: null,
 };
 
 function logPuppeteerFailure(err) {
@@ -265,24 +257,7 @@ try {
     console.warn('[chesspnt-wrapper] Qwen session not found or invalid:', formatErrorLogLine('[qwen session] ', e));
 }
 
-// DeepSeek session: prefer volume, then app directory (legacy path)
-let deepseekSession = null;
-try {
-    const paths = [
-        path.join(DATA_DIR, 'deepseek_session.json'),
-        path.join(__dirname, 'deepseek_session.json'),
-    ];
-    const sessionPath = paths.find((p) => fs.existsSync(p));
-    if (sessionPath) {
-        deepseekSession = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
-        console.log('[chesspnt-wrapper] DeepSeek session loaded from', sessionPath);
-    }
-} catch (e) {
-    console.warn(
-        '[chesspnt-wrapper] DeepSeek session not found or invalid:',
-        formatErrorLogLine('[deepseek session] ', e)
-    );
-}
+
 
 function puppeteerLoginInFlightFlag() {
     return Boolean(puppeteerLoginInFlight);
@@ -364,6 +339,214 @@ app.get('/api/probe-chesspnt-outbound', (req, res) => {
     preq.end();
 });
 
+/**
+ * GET /api/cards
+ * Fetches the real card list from ChessPNT card APIs (sass/gemini/grok/claude/openai).
+ * Returns { sass: [...], gemini: [...], grok: [...], claude: [...], plus: [...] }
+ * Each card has: { carID, title (username), status, isPlus, badge, nodeType }
+ */
+app.get('/api/cards', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+
+    const userToken = (() => {
+        try {
+            const u = typeof sessionLocalStorage.user === 'string'
+                ? JSON.parse(sessionLocalStorage.user)
+                : sessionLocalStorage.user;
+            return u && u.token ? u.token : sessionLocalStorage.accessToken;
+        } catch (_) { return sessionLocalStorage.accessToken; }
+    })();
+
+    if (!userToken) {
+        return res.status(503).json({ ok: false, error: 'No accessToken in server session.' });
+    }
+
+    const baseUrl = PROXY_TARGET.replace(/\/$/, '');
+    const headers = {
+        'Content-Type': 'application/json',
+        'Cookie': sessionCookies || '',
+        'Origin': baseUrl,
+        'Referer': `${baseUrl}/list/`,
+        'User-Agent': 'Mozilla/5.0 (compatible; chesspnt-wrapper/1.0)',
+    };
+    if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+
+    async function fetchCards(clientPath, nodeType, badgeLabel) {
+        try {
+            const r = await fetch(`${baseUrl}/client-api${clientPath}`, { headers, redirect: 'follow' });
+            if (!r.ok) { console.warn(`[chesspnt-wrapper] GET /client-api${clientPath} -> ${r.status}`); return []; }
+            const json = await r.json();
+            // Response: { code: 200, msg: '\u8bf7\u6c42\u6210\u529f', data: [...] }
+            const list = Array.isArray(json) ? json
+                : (json && Array.isArray(json.data)) ? json.data
+                    : (json && Array.isArray(json.rows)) ? json.rows
+                        : [];
+            return list.map(c => ({
+                carID: c.carID || c.id || String(c.carId || ''),
+                title: c.carID || c.username || c.name || 'Instance',
+                // Chinese: \u7a7a\u95f2 = Idle, \u7e41\u5fd9 = Busy
+                status: (c.status === '\u7e41\u5fd9' || c.status === 'busy' || c.status === 'Busy' || c.status === 1) ? 'Busy' : 'Idle',
+                isPlus: c.isPlus || 0,
+                badge: badgeLabel,
+                nodeType,
+            })).filter(c => c.carID);
+        } catch (e) {
+            console.warn(`[chesspnt-wrapper] fetchCards /client-api${clientPath} error:`, e.message);
+            return [];
+        }
+    }
+
+    try {
+        const [sass, gemini, grok, claude, plus] = await Promise.all([
+            fetchCards('/sass/carpage', 'sass', 'Sass'),
+            fetchCards('/gemini/carpage', 'gemini', 'Gemini'),
+            fetchCards('/grok/carpage', 'grok', 'Grok'),
+            fetchCards('/claude/carpage', 'claude', 'Claude'),
+            fetchCards('/openai/carpage', 'plus', 'Plus'),
+        ]);
+        res.json({ ok: true, sass, gemini, grok, claude, plus });
+    } catch (e) {
+        res.status(502).json({ ok: false, error: e.message });
+    }
+});
+
+/**
+ * POST /api/connect-session
+ * Body: { carID: string, nodeType: string, planType: number }
+ *
+ * Per-nodeType auth flows (reverse-engineered from CarList-Bf02bWLT.js):
+ *   sass   -> GET /client-api/sass/logintoken        -> path suffix -> gpt.chesspnt.com + suffix
+ *   grok   -> GET /client-api/grok/loginToken        -> path suffix -> grok.chesspnt.com + suffix
+ *   gemini -> GET /client-api/gemini/loginToken?...  -> path suffix -> gemini.chesspnt.com + suffix
+ *   claude -> GET /client-api/claude/auth?...        -> URL/path    -> via sxClaudeUrl or claudeUrl
+ *   plus   -> POST /client-api/openai/auth -> POST /auth/login -> /list/#/home
+ */
+app.post('/api/connect-session', express.json(), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const { carID, nodeType, planType } = req.body || {};
+    if (!carID || !nodeType) {
+        return res.status(400).json({ ok: false, error: 'Missing carID or nodeType.' });
+    }
+
+    const { userToken, username } = (() => {
+        try {
+            const u = typeof sessionLocalStorage.user === 'string'
+                ? JSON.parse(sessionLocalStorage.user) : sessionLocalStorage.user;
+            return { userToken: u && u.token ? u.token : sessionLocalStorage.accessToken, username: u && u.username ? u.username : '' };
+        } catch (_) { return { userToken: sessionLocalStorage.accessToken, username: '' }; }
+    })();
+    if (!userToken) return res.status(503).json({ ok: false, error: 'No session token yet.' });
+
+    const siteConfig = (() => {
+        try { return JSON.parse(sessionLocalStorage.site || '{}'); } catch (_) { return {}; }
+    })();
+
+    const baseUrl = PROXY_TARGET.replace(/\/$/, '');
+    const hdrs = {
+        'Content-Type': 'application/json',
+        'Cookie': sessionCookies || '',
+        'Origin': baseUrl,
+        'Referer': `${baseUrl}/list/`,
+        'User-Agent': 'Mozilla/5.0 (compatible; chesspnt-wrapper/1.0)',
+        'Authorization': `Bearer ${userToken}`,
+    };
+
+    async function apiGet(path) {
+        const r = await fetch(`${baseUrl}/client-api${path}`, { headers: hdrs, redirect: 'follow' });
+        const text = await r.text();
+        console.log(`[chesspnt-wrapper] GET /client-api${path} => ${r.status}: ${text.slice(0, 200)}`);
+        try { return { status: r.status, json: JSON.parse(text), text }; }
+        catch (_) { return { status: r.status, json: null, text }; }
+    }
+    async function apiPost(path, body) {
+        const r = await fetch(`${baseUrl}/client-api${path}`, {
+            method: 'POST', headers: hdrs, body: JSON.stringify(body), redirect: 'follow',
+        });
+        const text = await r.text();
+        console.log(`[chesspnt-wrapper] POST /client-api${path} => ${r.status}: ${text.slice(0, 200)}`);
+        try { return { status: r.status, json: JSON.parse(text), text }; }
+        catch (_) { return { status: r.status, json: null, text }; }
+    }
+    function extractData(result) {
+        if (!result.json) return null;
+        if (typeof result.json === 'string') return result.json;
+        if (result.json.data && typeof result.json.data === 'string') return result.json.data;
+        return null;
+    }
+
+    try {
+        let sessionUrl = null;
+
+        if (nodeType === 'sass') {
+            const r = await apiGet('/sass/logintoken');
+            const suffix = extractData(r) || r.text.trim();
+            if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
+                const base = (siteConfig.soruxGptSideBarUrl || 'https://gpt.chesspnt.com').replace(/\/$/, '');
+                sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            }
+
+        } else if (nodeType === 'grok') {
+            const isSuper = (planType || 0) >= 3 ? 'true' : 'false';
+            const r = await apiGet(`/grok/loginToken?isSuper=${isSuper}`);
+            const suffix = extractData(r) || r.text.trim();
+            if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
+                const base = (siteConfig.grokUrl || 'https://grok.chesspnt.com').replace(/\/$/, '');
+                sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            }
+
+        } else if (nodeType === 'gemini') {
+            // usertoken must be the account USERNAME, not JWT
+            const params = new URLSearchParams({ usertoken: username, carid: carID, isPlus: planType || 0 });
+            const r = await apiGet(`/gemini/loginToken?${params}`);
+            const suffix = extractData(r) || r.text.trim();
+            if (suffix && (suffix.startsWith('/') || suffix.startsWith('http'))) {
+                const base = (siteConfig.geminiUrl || 'https://gemini.chesspnt.com').replace(/\/$/, '');
+                sessionUrl = suffix.startsWith('http') ? suffix : base + suffix;
+            }
+
+        } else if (nodeType === 'claude') {
+            // usertoken must be the account USERNAME, not JWT
+            const params = new URLSearchParams({ usertoken: username, carid: carID, isPlus: planType || 0 });
+            const r = await apiGet(`/claude/auth?${params}`);
+            // Returns a raw path string like /auth/logintoken?... (not JSON)
+            const data = extractData(r) || r.text.trim();
+            if (data && (data.startsWith('/') || data.startsWith('http'))) {
+                const claudeBase = (siteConfig.sxClaudeUrl || siteConfig.claudeUrl || 'https://claude.chesspnt.com').replace(/\/$/, '');
+                sessionUrl = data.startsWith('http') ? data : claudeBase + data;
+            }
+
+
+        } else {
+            // plus / claudeSaas / embedded
+            const authR = await apiPost('/openai/auth', { usertoken: userToken, nodeType, carid: carID, planType: planType || 0 });
+            const activeCarID = extractData(authR) || carID;
+            const loginR = await fetch(`${baseUrl}/auth/login?carid=${encodeURIComponent(activeCarID)}`, {
+                method: 'POST',
+                headers: hdrs,
+                body: JSON.stringify({ usertoken: userToken, nodeType, carid: activeCarID, planType: planType || 0 }),
+                redirect: 'manual',
+            });
+            console.log(`[chesspnt-wrapper] POST /auth/login => ${loginR.status}`);
+            if (loginR.status >= 200 && loginR.status < 400) {
+                sessionUrl = '/list/#/home';
+            } else {
+                const errBody = await loginR.text().catch(() => '');
+                return res.status(502).json({ ok: false, error: `auth/login returned ${loginR.status}`, body: errBody.slice(0, 200) });
+            }
+        }
+
+        if (sessionUrl) {
+            console.log(`[chesspnt-wrapper] connect-session OK: nodeType=${nodeType} url=${sessionUrl}`);
+            return res.json({ ok: true, url: sessionUrl, nodeType });
+        }
+        return res.status(502).json({ ok: false, error: `No session URL for nodeType=${nodeType}` });
+
+    } catch (err) {
+        console.error('[chesspnt-wrapper] /api/connect-session error:', err.message);
+        return res.status(502).json({ ok: false, error: err.message });
+    }
+});
+
 /** Portal polls this so it does not scrape the iframe before deferred Puppeteer login finishes. */
 app.get('/api/chesspnt-client-session', (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -410,7 +593,6 @@ function recordProxyFailure(label, err, req, targetUrl) {
     };
     if (label === 'chesspnt') healthState.proxyChesspntLastFailure = payload;
     else if (label === 'qwen') healthState.proxyQwenLastFailure = payload;
-    else if (label === 'deepseek') healthState.proxyDeepseekLastFailure = payload;
     console.error(`[chesspnt-wrapper] Proxy error (${label}):\n` + JSON.stringify(payload, null, 2));
 }
 
@@ -499,143 +681,7 @@ const qwenProxyOptions = {
     cookieDomainRewrite: { '*': '' },
 };
 
-const DEEPSEEK_TARGET = 'https://chat.deepseek.com';
 
-/** Parse Cookie header values (best-effort) for merging server session + browser headers. */
-function parseCookieHeaderToMap(cookieHeader) {
-    const out = new Map();
-    if (!cookieHeader || typeof cookieHeader !== 'string') return out;
-    for (const part of cookieHeader.split(';')) {
-        const idx = part.indexOf('=');
-        if (idx === -1) continue;
-        const name = part.slice(0, idx).trim();
-        const value = part.slice(idx + 1).trim();
-        if (name) out.set(name, value);
-    }
-    return out;
-}
-
-function mergeCookieHeaderStrings(sessionCookieStr, incomingCookieHeader) {
-    const m = parseCookieHeaderToMap(sessionCookieStr || '');
-    for (const [k, v] of parseCookieHeaderToMap(incomingCookieHeader || '')) m.set(k, v);
-    const parts = [];
-    for (const [k, v] of m) parts.push(`${k}=${v}`);
-    return parts.join('; ');
-}
-
-function deepseekSessionCookieHeader() {
-    if (!deepseekSession || !deepseekSession.cookies) return '';
-    return deepseekSession.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-}
-
-/** Map https://our-host/deepseek/... → https://chat.deepseek.com/... for upstream Referer. */
-function rewriteDeepseekRefererForUpstream(clientRefererRaw) {
-    if (!clientRefererRaw || typeof clientRefererRaw !== 'string') return `${DEEPSEEK_TARGET}/`;
-    try {
-        const u = new URL(clientRefererRaw);
-        const p = u.pathname || '/';
-        if (p === '/deepseek' || p.startsWith('/deepseek/')) {
-            let inner = p.slice('/deepseek'.length) || '/';
-            if (!inner.startsWith('/')) inner = `/${inner}`;
-            return `${DEEPSEEK_TARGET}${inner}${u.search || ''}`;
-        }
-    } catch (_) {}
-    return `${DEEPSEEK_TARGET}/`;
-}
-
-/**
- * DeepSeek’s SPA calls same-origin paths like /api/... at the site root. Under /deepseek only the first
- * document load was proxied; API + assets then hit the ChessPNT proxy and Cloudflare saw broken sessions
- * (“Max challenge attempts exceeded”). Route those paths to DeepSeek when the tab’s Referer is /deepseek.
- */
-function deepseekPathFilter(pathname, req) {
-    if (pathname === '/deepseek' || pathname.startsWith('/deepseek/')) return true;
-    const ref = String(req.headers.referer || req.headers.referrer || '');
-    if (!ref.includes('/deepseek')) return false;
-    return (
-        pathname.startsWith('/api/') ||
-        pathname.startsWith('/_next/') ||
-        pathname.startsWith('/static/') ||
-        pathname.startsWith('/images/') ||
-        pathname.startsWith('/assets/') ||
-        pathname.startsWith('/cdn/') ||
-        pathname.startsWith('/locales/') ||
-        pathname === '/favicon.ico' ||
-        pathname.endsWith('/sw.js') ||
-        pathname.includes('workbox')
-    );
-}
-
-const deepseekProxyOptions = {
-    target: DEEPSEEK_TARGET,
-    changeOrigin: true,
-    ws: true,
-    xfwd: true,
-    agent: deepseekOutboundAgent,
-    proxyTimeout: PROXY_TIMEOUT_MS,
-    timeout: PROXY_TIMEOUT_MS,
-    pathFilter: deepseekPathFilter,
-    pathRewrite: (path) => {
-        const q = path.indexOf('?');
-        const pathnameOnly = q === -1 ? path : path.slice(0, q);
-        const search = q === -1 ? '' : path.slice(q);
-        if (pathnameOnly === '/deepseek' || pathnameOnly.startsWith('/deepseek/')) {
-            let inner = pathnameOnly.slice('/deepseek'.length) || '/';
-            if (!inner.startsWith('/')) inner = `/${inner}`;
-            return `${inner}${search}`;
-        }
-        return path;
-    },
-    onProxyReq: (proxyReq, req, res) => {
-        const merged = mergeCookieHeaderStrings(deepseekSessionCookieHeader(), req.headers.cookie);
-        if (merged) proxyReq.setHeader('Cookie', merged);
-        const ua = req.headers['user-agent'];
-        if (ua) proxyReq.setHeader('User-Agent', ua);
-        const lang = req.headers['accept-language'];
-        if (lang) proxyReq.setHeader('Accept-Language', lang);
-        proxyReq.setHeader('Origin', DEEPSEEK_TARGET);
-        const ref = req.headers.referer || req.headers.referrer;
-        proxyReq.setHeader('Referer', rewriteDeepseekRefererForUpstream(ref));
-    },
-    onProxyRes: (proxyRes, req, res) => {
-        delete proxyRes.headers['content-security-policy'];
-        delete proxyRes.headers['x-frame-options'];
-    },
-    onError: (err, req, res, target) => {
-        recordProxyFailure('deepseek', err, req, String(target || DEEPSEEK_TARGET));
-        if (res && typeof res.writeHead === 'function' && !res.headersSent) {
-            res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(
-                JSON.stringify(
-                    {
-                        where: 'deepseek reverse proxy',
-                        target: DEEPSEEK_TARGET,
-                        path: req && req.url,
-                        error: serializeError(err),
-                    },
-                    null,
-                    2
-                )
-            );
-        }
-    },
-    cookieDomainRewrite: { '*': '' },
-};
-
-if (USE_DEEPSEEK_PROXY) {
-    app.use(createProxyMiddleware(deepseekProxyOptions));
-} else {
-    app.use((req, res, next) => {
-        const p = req.path || '';
-        if (p !== '/deepseek' && !p.startsWith('/deepseek/')) return next();
-        const inner = p === '/deepseek' || p === '/deepseek/' ? '/' : p.slice('/deepseek'.length) || '/';
-        const pathPart = inner.startsWith('/') ? inner : `/${inner}`;
-        const base = DEEPSEEK_TARGET.replace(/\/$/, '');
-        const qi = req.url.indexOf('?');
-        const qs = qi !== -1 ? req.url.slice(qi) : '';
-        res.redirect(302, `${base}${pathPart}${qs}`);
-    });
-}
 
 app.use('/qwen', createProxyMiddleware(qwenProxyOptions));
 app.use('/', createProxyMiddleware(proxyOptions));
@@ -647,11 +693,6 @@ const LISTEN_HOST = process.env.HOST || '0.0.0.0';
 const server = app.listen(PORT, LISTEN_HOST, () => {
     console.log(`Team Proxy Server listening on http://${LISTEN_HOST}:${PORT}`);
     console.log('[chesspnt-wrapper] PROXY_TIMEOUT_MS (hardcoded)=', PROXY_TIMEOUT_MS);
-    if (!USE_DEEPSEEK_PROXY) {
-        console.log(
-            '[chesspnt-wrapper] DeepSeek: /deepseek → redirect to chat.deepseek.com (set DEEPSEEK_USE_PROXY=1 to proxy; session cookies must match this server egress IP).'
-        );
-    }
     if (!process.env.PERSISTENT_STORAGE_DIR) {
         console.log('[chesspnt-wrapper] Tip: set PERSISTENT_STORAGE_DIR=/storage on Railway for persisted sessions.');
     }
