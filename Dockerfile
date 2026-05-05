@@ -3,8 +3,8 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 USER root
 WORKDIR /app
 
-# Create storage dir before switching users
-RUN mkdir -p /storage
+# Create dirs and hand ownership to pptruser before switching
+RUN mkdir -p /storage && chown -R pptruser:pptruser /app /storage
 
 COPY --chown=pptruser:pptruser package*.json ./
 
