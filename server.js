@@ -187,6 +187,35 @@ function persistChesspntSessionToDisk() {
     fs.writeFileSync(chesspntLsPath, JSON.stringify(sessionLocalStorage, null, 2), 'utf8');
 }
 
+function decodeJwtExp(token) {
+    try {
+        const parts = String(token).split('.');
+        if (parts.length !== 3) return null;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+        return payload.exp ? payload.exp * 1000 : null;
+    } catch (_) { return null; }
+}
+
+function getSessionToken() {
+    // Prefer accessToken directly — it's what Puppeteer waits on and is most reliably fresh.
+    // Fall back to user.token only if accessToken is absent.
+    const at = sessionLocalStorage && sessionLocalStorage.accessToken;
+    if (at && String(at).length > 40) return at;
+    try {
+        const u = typeof sessionLocalStorage.user === 'string'
+            ? JSON.parse(sessionLocalStorage.user) : sessionLocalStorage.user;
+        return u && u.token ? u.token : null;
+    } catch (_) { return null; }
+}
+
+function tokenExpiresInMs() {
+    const token = getSessionToken();
+    if (!token) return -1;
+    const exp = decodeJwtExp(token);
+    if (exp === null) return Infinity;
+    return exp - Date.now();
+}
+
 let puppeteerLoginInFlight = null;
 
 /** Populated for GET /health — structured errors, no passwords. */
@@ -210,7 +239,7 @@ async function runChesspntPuppeteerLogin(reason) {
     if (!puppeteerWanted) return false;
     healthState.lastPuppeteerAttemptAt = new Date().toISOString();
     healthState.lastPuppeteerAttemptReason = String(reason || '');
-    const { loginChesspntSession, redeemCdkSession } = require('./chesspnt_puppeteer_login');
+    const { loginChesspntSession } = require('./chesspnt_puppeteer_login');
     console.log('[chesspnt-wrapper] ChessPNT Puppeteer login:', reason || 'refresh');
     const { cookieHeader, localStorageObj } = await loginChesspntSession({
         baseUrl: PROXY_TARGET,
@@ -218,6 +247,39 @@ async function runChesspntPuppeteerLogin(reason) {
         password: PUPPETEER_PASS,
         stepTimeoutMs: parseInt(process.env.CHESSPNT_PUPPETEER_TIMEOUT_MS || '120000', 10),
     });
+
+    // Verify the new token is actually valid before accepting it
+    const newToken = localStorageObj.accessToken;
+    const expMs = newToken ? decodeJwtExp(newToken) : null;
+    if (expMs !== null && expMs < Date.now()) {
+        throw new Error(`Puppeteer login returned an already-expired token (exp=${new Date(expMs).toISOString()}). Login may have silently failed — check credentials or CAPTCHA.`);
+    }
+    if (expMs) {
+        console.log(`[chesspnt-wrapper] New token valid until ${new Date(expMs).toISOString()} (${Math.round((expMs - Date.now()) / 60000)}min from now)`);
+    }
+
+    // Do a live test call to confirm ChessPNT actually accepts the new token
+    try {
+        const testRes = await fetch(`${PROXY_TARGET.replace(/\/$/, '')}/client-api/sass/logintoken`, {
+            headers: {
+                'Authorization': `Bearer ${newToken}`,
+                'Cookie': cookieHeader || '',
+                'Origin': PROXY_TARGET,
+                'Referer': `${PROXY_TARGET}/list/`,
+                'User-Agent': 'Mozilla/5.0 (compatible; chesspnt-wrapper/1.0)',
+            },
+        });
+        const testBody = await testRes.text();
+        const testJson = (() => { try { return JSON.parse(testBody); } catch (_) { return null; } })();
+        if (testJson && testJson.code === 401) {
+            throw new Error(`Post-login verification failed: ChessPNT still returns 401 after fresh login. Body: ${testBody.slice(0, 200)}`);
+        }
+        console.log(`[chesspnt-wrapper] Post-login token verified OK (sass/logintoken status=${testRes.status})`);
+    } catch (verifyErr) {
+        if (verifyErr.message.includes('Post-login verification failed')) throw verifyErr;
+        console.warn('[chesspnt-wrapper] Post-login verify request failed (network?):', verifyErr.message);
+    }
+
     sessionCookies = cookieHeader;
     sessionLocalStorage = localStorageObj;
     healthState.lastPuppeteerOkAt = new Date().toISOString();
@@ -431,14 +493,29 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Missing carID or nodeType.' });
     }
 
-    const { userToken, username } = (() => {
+    const userToken = getSessionToken();
+    const username = (() => {
         try {
             const u = typeof sessionLocalStorage.user === 'string'
                 ? JSON.parse(sessionLocalStorage.user) : sessionLocalStorage.user;
-            return { userToken: u && u.token ? u.token : sessionLocalStorage.accessToken, username: u && u.username ? u.username : '' };
-        } catch (_) { return { userToken: sessionLocalStorage.accessToken, username: '' }; }
+            return u && u.username ? u.username : '';
+        } catch (_) { return ''; }
     })();
+
     if (!userToken && nodeType !== 'perplexity') return res.status(503).json({ ok: false, error: 'No session token yet.' });
+
+    if (userToken && nodeType !== 'perplexity') {
+        const remainingMs = tokenExpiresInMs();
+        if (remainingMs < 0) {
+            console.log(`[connect-session] Token is expired by ${Math.round(-remainingMs / 60000)}min — triggering re-login`);
+            schedulePuppeteerLogin('connect-session-expired-token');
+            return res.status(503).json({ ok: false, error: 'Session token expired, re-login in progress. Retry in ~60s.' });
+        }
+        if (remainingMs < 5 * 60 * 1000) {
+            console.log(`[connect-session] Token expires in ${Math.round(remainingMs / 60000)}min — triggering proactive refresh`);
+            schedulePuppeteerLogin('connect-session-near-expiry');
+        }
+    }
 
     const siteConfig = (() => {
         try { return JSON.parse(sessionLocalStorage.site || '{}'); } catch (_) { return {}; }
@@ -735,15 +812,18 @@ const server = app.listen(PORT, LISTEN_HOST, () => {
         );
     }
 
-    if (puppeteerWanted && PUPPETEER_REFRESH_MS > 0) {
+    if (puppeteerWanted) {
+        // Check token expiry every 15 min; re-login when < 30 min remaining
+        const TOKEN_REFRESH_BUFFER_MS = 30 * 60 * 1000;
+        const CHECK_INTERVAL_MS = 15 * 60 * 1000;
         setInterval(() => {
-            schedulePuppeteerLogin('interval');
-        }, PUPPETEER_REFRESH_MS);
-        console.log(
-            '[chesspnt-wrapper] ChessPNT Puppeteer refresh every',
-            Math.round(PUPPETEER_REFRESH_MS / 3600000),
-            'h (CHESSPNT_PUPPETEER_REFRESH_MS)'
-        );
+            const remaining = tokenExpiresInMs();
+            if (remaining < TOKEN_REFRESH_BUFFER_MS) {
+                console.log(`[chesspnt-wrapper] Token expires in ${Math.round(remaining / 60000)}min — refreshing proactively`);
+                schedulePuppeteerLogin('proactive-expiry');
+            }
+        }, CHECK_INTERVAL_MS);
+        console.log('[chesspnt-wrapper] Smart token refresh: checks every 15min, refreshes when <30min remaining');
     }
 });
 
