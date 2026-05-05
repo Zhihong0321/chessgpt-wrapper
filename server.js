@@ -457,16 +457,21 @@ app.post('/api/connect-session', express.json(), async (req, res) => {
     async function apiGet(path) {
         const r = await fetch(`${baseUrl}/client-api${path}`, { headers: hdrs, redirect: 'follow' });
         const text = await r.text();
-        try { return { status: r.status, json: JSON.parse(text), text }; }
-        catch (_) { return { status: r.status, json: null, text }; }
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) {}
+        // Trigger Puppeteer re-login if ChessPNT says token is expired
+        if (json && json.code === 401) schedulePuppeteerLogin('connect-session-401');
+        return { status: r.status, json, text };
     }
     async function apiPost(path, body) {
         const r = await fetch(`${baseUrl}/client-api${path}`, {
             method: 'POST', headers: hdrs, body: JSON.stringify(body), redirect: 'follow',
         });
         const text = await r.text();
-        try { return { status: r.status, json: JSON.parse(text), text }; }
-        catch (_) { return { status: r.status, json: null, text }; }
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) {}
+        if (json && json.code === 401) schedulePuppeteerLogin('connect-session-401');
+        return { status: r.status, json, text };
     }
     function extractData(result) {
         if (!result.json) return null;

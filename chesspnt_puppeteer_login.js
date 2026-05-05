@@ -102,12 +102,24 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
             }
         });
 
+        // Snapshot the token BEFORE submit so we can detect when it genuinely changes
+        const tokenBefore = await page.evaluate(() => {
+            try { return window.localStorage && window.localStorage.getItem('accessToken'); } catch (_) { return null; }
+        }).catch(() => null);
+
         await runStep('click submit', () => page.click('button[type="submit"]'));
 
         try {
+            // Wait until accessToken is non-empty AND different from the pre-submit value
             await page.waitForFunction(
-                () => Boolean(window.localStorage && window.localStorage.getItem('accessToken')),
-                { timeout: stepTimeoutMs, polling: 500 }
+                (before) => {
+                    try {
+                        const t = window.localStorage && window.localStorage.getItem('accessToken');
+                        return Boolean(t) && t !== before;
+                    } catch (_) { return false; }
+                },
+                { timeout: stepTimeoutMs, polling: 500 },
+                tokenBefore
             );
         } catch (waitErr) {
             const snippet = await page
@@ -120,14 +132,15 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
                 /* screenshot optional */
             }
             const detail = new Error(
-                `After submit, accessToken never appeared in localStorage within ${stepTimeoutMs}ms. url=${url} waitError=${waitErr.message}. Page text (truncated): ${snippet.replace(/\s+/g, ' ').slice(0, 600)}`,
+                `After submit, accessToken never changed in localStorage within ${stepTimeoutMs}ms. tokenBefore=${String(tokenBefore).slice(0, 40)} url=${url} waitError=${waitErr.message}. Page text (truncated): ${snippet.replace(/\s+/g, ' ').slice(0, 600)}`,
                 { cause: waitErr }
             );
             detail.pageUrl = url;
             throw detail;
         }
 
-        await new Promise((r) => setTimeout(r, 1200));
+        // Extra settle time for the SPA to finish writing all localStorage keys
+        await new Promise((r) => setTimeout(r, 2000));
 
         const cookies = await runStep('page.cookies', () => page.cookies());
         const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
@@ -152,6 +165,24 @@ async function loginChesspntSession({ baseUrl, username, password, stepTimeoutMs
             err.cookieCount = cookies.length;
             err.localStorageKeys = Object.keys(localStorageObj || {});
             throw err;
+        }
+
+        // Decode JWT exp claim to confirm token is fresh
+        try {
+            const parts = localStorageObj.accessToken.split('.');
+            if (parts.length === 3) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+                const expDate = payload.exp ? new Date(payload.exp * 1000).toISOString() : 'no exp';
+                const nowMs = Date.now();
+                const freshMs = payload.exp ? (payload.exp * 1000 - nowMs) : null;
+                console.log(`[puppeteer] New token: uid=${payload.uid} uname=${payload.uname} exp=${expDate} (${freshMs !== null ? Math.round(freshMs / 60000) + 'min from now' : 'no exp'})`);
+                if (freshMs !== null && freshMs < 0) {
+                    throw new Error(`Token is already expired by ${Math.round(-freshMs / 60000)}min — login may have silently failed`);
+                }
+            }
+        } catch (jwtErr) {
+            if (jwtErr.message.includes('already expired')) throw jwtErr;
+            console.warn('[puppeteer] Could not decode token JWT:', jwtErr.message);
         }
 
         return { cookieHeader, localStorageObj };
